@@ -1,0 +1,9 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./project/weights:/app/project/weights
+      - ./project/outputs:/app/project/outputs
+    restart: always

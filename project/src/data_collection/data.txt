@@ -1,0 +1,35 @@
+QUERIES = {
+
+    "water": [
+        "flood water",
+        ,
+       
+    ],
+
+    "road": [
+        "road",
+        "street",
+        "highway",
+        "city road",
+        "asphalt road",
+        "road travel"
+    ],
+
+    "building": [
+        "building",
+        "house",
+        "apartment",
+        "city building",
+        "urban",
+        "architecture"
+    ],
+
+    "vegetation": [
+        "forest",
+        "trees",
+        "grass",
+        "plants",
+        "green field",
+        "nature"
+    ]
+}

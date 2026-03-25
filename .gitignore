@@ -1,0 +1,22 @@
+__pycache__/
+.DS_Store
+*.pyc
+
+# models
+*.pt
+*.pth
+
+# logs
+*.log
+*.err
+
+# dataset
+project/raw_dataset/
+project/dataset_clean/
+project/dataset_split/
+
+# outputs
+project/outputs/
+project/logs/
+project/test_videos/
+project/weights/
