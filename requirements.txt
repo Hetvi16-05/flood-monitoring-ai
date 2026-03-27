@@ -9,3 +9,5 @@ python-multipart
 numpy
 tqdm
 Pillow
+yagmail
+pygame

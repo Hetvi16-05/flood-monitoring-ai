@@ -6,16 +6,19 @@ logger = get_logger("IPLocation")
 def get_location():
     """
     Fetch dynamic location (lat, lon, city) based on IP.
+    Returns 0, 0, "Unknown" if error.
+    No crash allowed.
     """
     try:
         response = requests.get("http://ip-api.com/json/", timeout=5)
+        response.raise_for_status()
         data = response.json()
         if data["status"] == "success":
-            return data["lat"], data["lon"], data["city"]
+            return float(data["lat"]), float(data["lon"]), str(data["city"])
         else:
-            logger.warning("IP-API failed, using fallback.")
+            logger.warning("IP-API failed.")
     except Exception as e:
         logger.error(f"Location Error: {e}")
     
-    # Fallback to config defaults
-    return 22.3072, 73.1812, "Vadodara"
+    # Return defaults on error
+    return 0, 0, "Unknown"

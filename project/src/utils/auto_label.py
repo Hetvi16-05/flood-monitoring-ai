@@ -104,21 +104,25 @@ def process_image(name):
             f.write("\n".join(all_yolo_lines))
 
     # 2. Save Classification Mask (.png) for DeepLabV3
-    # We combine all detected masks into one mask with the base_label value
-    # Non-detected areas are set to 255 (ignore_index)
+    # We ensure every pixel has a valid class ID (0, 1, 2, 3)
+    # Background defaults to the base_label of the image folder
     masks_data = results[0].masks.data # [N, H, W]
+    
+    # Initialize with base_label instead of 255 (ignore)
+    final_mask = np.full((IMG_SIZE[1], IMG_SIZE[0]), base_label, dtype=np.uint8)
+    
     if masks_data is not None and len(masks_data) > 0:
-        # Use torch.any to get combined binary mask
+        # Use torch.any to get combined binary mask of detected objects
         combined_binary = torch.any(masks_data, dim=0).cpu().numpy().astype(np.uint8)
+        # We ensure it matches expected size
+        if combined_binary.shape != (IMG_SIZE[1], IMG_SIZE[0]):
+            combined_binary = cv2.resize(combined_binary, (IMG_SIZE[0], IMG_SIZE[1]), interpolation=cv2.INTER_NEAREST)
         
-        # Initialize with 255 (ignore)
-        final_mask = np.full(combined_binary.shape, 255, dtype=np.uint8)
-        
-        # Set detected areas to base_label
+        # Detected areas are set to base_label (redundant here but keeps logic consistent)
         final_mask[combined_binary == 1] = base_label
         
-        os.makedirs(mask_dir, exist_ok=True)
-        cv2.imwrite(mask_path, final_mask)
+    os.makedirs(mask_dir, exist_ok=True)
+    cv2.imwrite(mask_path, final_mask)
 
 # ---------------- AUTO LABEL ----------------
 

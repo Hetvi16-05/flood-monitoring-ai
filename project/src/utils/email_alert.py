@@ -1,4 +1,8 @@
-import yagmail
+try:
+    import yagmail
+except ImportError:
+    yagmail = None
+
 import os
 from config import EMAIL_USER, EMAIL_PASS
 from project.src.utils.logger import get_logger
@@ -8,7 +12,13 @@ logger = get_logger("EmailAlert")
 def send_flood_alert(message, city="Unknown"):
     """
     Send automated email alert using yagmail.
+    Returns early if yagmail not installed or credentials missing.
+    No crash allowed.
     """
+    if yagmail is None:
+        logger.warning("yagmail not installed. Email alert skipped.")
+        return
+
     if not EMAIL_USER or not EMAIL_PASS or EMAIL_PASS == "your_app_password":
         logger.warning("Email credentials not set. Skipping.")
         return

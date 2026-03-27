@@ -19,6 +19,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from config import DEVICE, NUM_CLASSES, MODEL_PATH, YOLO_MODEL_PATH, COLORS, INF_SIZE
+from project.src.utils.area import calculate_water_area
+from project.src.utils.risk import get_flood_risk
 from project.src.utils.ip_location import get_location
 from project.src.utils.weather_api import get_rainfall
 
@@ -39,12 +41,18 @@ async def load_models():
     SEG_MODEL.to(DEVICE).eval()
 
 def flood_logic_pro(img):
+    """Standardized Hybrid Detection Logic for API"""
     orig_h, orig_w = img.shape[:2]
     
-    # Pro Context
+    # Context
     lat, lon, city = get_location()
     rain = get_rainfall(lat, lon)
     
+    # 1. YOLO (Primary)
+    results = YOLO_MODEL(img, verbose=False)[0]
+    obj_count = len(results.boxes)
+    
+    # 2. Segmentation (Secondary)
     with torch.no_grad():
         tensor = transforms.Compose([
             transforms.ToPILImage(), transforms.Resize(INF_SIZE), transforms.ToTensor(),
@@ -52,22 +60,22 @@ def flood_logic_pro(img):
         ])(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)).unsqueeze(0).to(DEVICE)
         pred = torch.argmax(SEG_MODEL(tensor)["out"], dim=1)[0].cpu().numpy().astype(np.uint8)
     
-    water_p = round((np.sum(pred == 0) / (pred.size - np.sum(pred == 255))) * 100, 2)
-    severity = "HIGH" if water_p > 30 else "MEDIUM" if water_p > 10 else "LOW"
-    
-    results = YOLO_MODEL(img, verbose=False)[0]
+    # 3. Standardized Analytics
+    water_p = calculate_water_area(pred)
+    risk = get_flood_risk(water_p, obj_count)
     
     return {
-        "water_percent": water_p,
-        "severity": severity,
+        "water_percent": round(water_p, 2),
+        "severity": risk,
         "rainfall_mm": rain,
         "location": {
             "city": city,
             "lat": lat,
             "lon": lon
         },
-        "detections": len(results.boxes),
-        "device": str(DEVICE)
+        "detections": obj_count,
+        "device": str(DEVICE),
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
     }
 
 @app.post("/predict/pro")
