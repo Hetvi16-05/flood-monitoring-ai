@@ -33,11 +33,10 @@ def get_logger(name):
         
     return logger
 
-def log_to_csv(water_p, objects, animals, rain, risk, location):
+def log_to_csv(water_p, obj_summary, risk_level, risk_score, rain, location):
     """
-    PHASE 6: Logging system
-    Saves: timestamp, water %, objects, animals, rain, risk, location
-    to project/logs/monitor_log.csv
+    PRODUCTION LOGGING:
+    Records Timestamp, Water %, Object Summary, Rain, Risk Level, Risk Score, Location
     """
     try:
         project_root = str(Path(__file__).resolve().parents[3])
@@ -48,15 +47,15 @@ def log_to_csv(water_p, objects, animals, rain, risk, location):
         with open(csv_path, 'a', newline='') as f:
             writer = csv.writer(f)
             if is_new:
-                writer.writerow(["Timestamp", "Water %", "Objects", "Animals", "Rain", "Risk", "Location"])
+                writer.writerow(["Timestamp", "Water_%", "Object_Summary", "Rain_mm", "Risk_Level", "Risk_Score", "Location"])
             
             writer.writerow([
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 f"{water_p:.2f}",
-                ", ".join(objects) if objects else "None",
-                ", ".join(animals) if animals else "None",
+                obj_summary if obj_summary else "None",
                 rain,
-                risk,
+                risk_level,
+                f"{risk_score}",
                 location
             ])
     except Exception as e:

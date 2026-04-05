@@ -8,16 +8,7 @@ from pathlib import Path
 from multiprocessing import Pool, cpu_count
 from ultralytics import FastSAM
 
-# ---------------- CONFIG ----------------
-
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-torch.set_default_dtype(torch.float32)
-
-project_root = str(Path(__file__).resolve().parents[3])
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-from config import CLEAN_DIR, IMG_SIZE, CLASSES
+from config import CLEAN_DIR, IMG_SIZE, CLASSES, PROJECT_ROOT
 
 # ---------------- DEVICE ----------------
 
@@ -45,7 +36,7 @@ model = None
 
 def init_worker():
     global model
-    weights_path = os.path.join(project_root, "project", "weights", "FastSAM-s.pt")
+    weights_path = os.path.join(PROJECT_ROOT, "project", "weights", "FastSAM-s.pt")
     os.makedirs(os.path.dirname(weights_path), exist_ok=True)
     
     # Loads model (downloads if missing)

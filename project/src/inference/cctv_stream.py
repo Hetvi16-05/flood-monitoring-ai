@@ -2,8 +2,8 @@ import cv2
 import sys
 import os
 from pathlib import Path
-from .inference_utils import run_hybrid
-from ..utils.logger import get_logger
+from inference.inference_utils import run_hybrid
+from utils.logger import get_logger
 
 logger = get_logger("CCTVStream")
 

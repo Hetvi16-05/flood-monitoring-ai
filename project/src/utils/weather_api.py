@@ -9,7 +9,7 @@ except ImportError:
         from config import WEATHER_API_KEY
     except ImportError:
         WEATHER_API_KEY = None
-from project.src.utils.logger import get_logger
+from utils.logger import get_logger
 logger = get_logger("WeatherAPI")
 def get_rainfall(lat: float, lon: float) -> float:
     """

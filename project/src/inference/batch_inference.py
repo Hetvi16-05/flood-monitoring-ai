@@ -20,11 +20,11 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from config import DEVICE, NUM_CLASSES, MODEL_PATH, YOLO_MODEL_PATH, COLORS, INF_SIZE, OUTPUT_DIR
-from project.src.utils.logger import get_logger
-from project.src.utils.ip_location import get_location
-from project.src.utils.weather_api import get_rainfall
-from project.src.utils.area import calculate_water_area
-from project.src.utils.risk import get_flood_risk
+from utils.logger import get_logger
+from utils.ip_location import get_location
+from utils.weather_api import get_rainfall
+from utils.area import calculate_water_area
+from utils.risk import get_flood_risk
 
 logger = get_logger("BatchFloodPro")
 

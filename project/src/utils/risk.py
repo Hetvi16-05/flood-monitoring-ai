@@ -1,46 +1,32 @@
-import os
-import sys
+# project/src/utils/risk.py
 
 # Standardized Risk Levels
 LOW = "LOW"
 MEDIUM = "MEDIUM"
 HIGH = "HIGH"
-FLOOD = "FLOOD"
-DANGER = "DANGER"
+DANGEROUS = "DANGEROUS"
 
-def get_flood_risk(water_percent: float, obj_count: int = 0, animal_count: int = 0) -> str:
+def get_flood_risk(water_p, has_person=False, has_animal=False, has_vehicle=False, oif_detected=False):
     """
-    Standardized risk assessment based on hybrid detection metrics.
-    PHASE 2 & 5 Rules:
-    - No objects detection = LOW (noise suppression)
-    - water < 10 = LOW
-    - water 10-30 = MEDIUM
-    - water >30 and obj >1 = HIGH
-    - water >50 and obj >2 = FLOOD
-    - animal > 0 and water > 20 = DANGER
+    Production-level Risk Engine.
+    Returns: (risk_level, risk_score)
     """
-    
-    # 1. Noise Suppression Rule
-    if obj_count == 0:
-        return LOW
-        
-    # 2. Hierarchy of Risk (Highest to Lowest)
-    
-    # FLOOD: Extreme condition
-    if water_percent >= 50 and obj_count > 2:
-        return FLOOD
-        
-    # DANGER: Visual alert for animals in water (Phase 5)
-    if animal_count > 0 and water_percent > 20:
-        return DANGER
-        
-    # HIGH: Significant water with multiple objects
-    if water_percent >= 30 and obj_count > 1:
-        return HIGH
-        
-    # MEDIUM: Moderate water
-    if water_percent >= 10:
-        return MEDIUM
-        
-    # LOW: Default/Safe
-    return LOW
+    score = 0
+    # 1. Base Score (Max 50 pts)
+    score += min(50, water_p * 0.5)
+    # 2. Object Multipliers
+    if has_person: score += 15
+    if has_animal: score += 10
+    if has_vehicle: score += 5
+    # 3. Object-in-Flood (OIF)
+    if oif_detected:
+        if has_person: score += 25
+        elif has_animal: score += 15
+        else: score += 10
+    score = min(100, score)
+    # 4. Categorization
+    if score < 15: level = LOW
+    elif score < 40: level = MEDIUM
+    elif score < 70: level = HIGH
+    else: level = DANGEROUS
+    return level, int(score)

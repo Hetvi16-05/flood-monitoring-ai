@@ -15,10 +15,10 @@ if project_root not in sys.path:
     print(f"DEBUG: Inserted {project_root} into sys.path")
 
 from config import RAW_DIR, CLEAN_DIR, IMG_SIZE
-from project.src.preprocessing.image_processing import resize_image, normalize_image
-from project.src.preprocessing.noise_reduction import bilateral_filter
-from project.src.preprocessing.blur import gaussian_blur
-from project.src.preprocessing.edge_detection import canny_edge
+from preprocessing.image_processing import resize_image, normalize_image
+from preprocessing.noise_reduction import bilateral_filter
+from preprocessing.blur import gaussian_blur
+from preprocessing.edge_detection import canny_edge
 
 def process_pipeline(image_path, output_path, apply_edge=False):
     """Execution of the full preprocessing pipeline on a single image."""

@@ -36,23 +36,28 @@ else:
     DEVICE = torch.device("cpu")
 
 # -----------------------------
-# IMAGE SETTINGS
+# IMAGE & TRAINING SETTINGS
 # -----------------------------
 IMG_SIZE = (256, 256)   # Training size
 INF_SIZE = (640, 640)   # Inference size for better quality
+BATCH_SIZE = 16
+EPOCHS = 50
+LEARNING_RATE = 1e-4
 
 # -----------------------------
-# CLASSES
+# CLASSES (Updated for Flood Detection Upgrade)
 # -----------------------------
-NUM_CLASSES = 4
-CLASSES = ["water", "road", "building", "vegetation"]
+NUM_CLASSES = 6
+CLASSES = ["flood_water", "road", "building", "vegetation", "vehicle", "animal"]
 
-# 0: water, 1: road, 2: building, 3: vegetation
+# 0: flood_water, 1: road, 2: building, 3: vegetation, 4: vehicle, 5: animal
 COLORS = [
-    (255, 0, 0),      # Blue (Water)
-    (0, 255, 0),      # Green (Road?) - wait, original was Blue for water
-    (0, 0, 255),      # Red
-    (0, 128, 255),    # Orange
+    (255, 0, 0),      # Blue (Flood Water)
+    (0, 255, 0),      # Green (Road)
+    (0, 0, 255),      # Red (Building)
+    (0, 128, 255),    # Orange (Vegetation)
+    (255, 255, 0),    # Cyan/Yellow (Vehicle)
+    (255, 0, 255),    # Magenta (Animal)
 ]
 
 # -----------------------------
