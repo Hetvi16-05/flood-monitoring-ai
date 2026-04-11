@@ -8,6 +8,11 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from sklearn.metrics import confusion_matrix
 from pathlib import Path
+import sys
+# Add project/src to sys.path
+src_dir = str(Path(__file__).resolve().parents[1])
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
 
 # Important: Evaluate the 5-channel model
 from models.segmentation_v2 import create_deeplabv3plus

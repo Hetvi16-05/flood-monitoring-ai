@@ -57,15 +57,36 @@ st.title("🌧️ RAINWISE Flood Monitoring AI")
 def get_cached_models():
     return load_models()
 
+# --- MODEL ASSETS (Load early for sidebar) ---
+model_bundle = get_cached_models()
+models = model_bundle["models"]
+metadata = model_bundle["metadata"]
+
+# Extract metrics from log if available
+latest_iou = 0.0
+try:
+    log_path = Path(__file__).resolve().parents[2] / "logs/training_log.csv"
+    if log_path.exists():
+        import pandas as pd
+        df = pd.read_csv(log_path)
+        latest_iou = df["Val_IoU"].max()
+except:
+    pass
+
 # --- UTILS ---
 def get_conf_color(conf):
     if conf > 0.8: return "🟢 High"
     if conf > 0.5: return "🟡 Medium"
     return "🔴 Low"
 
-# -----------------------------
-# UI CONTROLS (Sidebar)
-# -----------------------------
+st.sidebar.divider()
+st.sidebar.title("🧠 AI Model Identity")
+st.sidebar.markdown(f"**Version:** `{metadata['seg_version']}`")
+st.sidebar.markdown(f"**Status:** `🟢 {metadata['seg_status']}`")
+st.sidebar.markdown(f"**Device:** `{metadata['device'].upper()}`")
+st.sidebar.markdown(f"**Latest IoU:** `{latest_iou:.4f}`")
+
+st.sidebar.divider()
 st.sidebar.title("🎯 Operational Controls")
 show_yolo = st.sidebar.toggle("Show YOLO Boxes", True)
 show_mask = st.sidebar.toggle("Show Mask Overlay", True)
@@ -93,10 +114,6 @@ except Exception as e:
     rain = 0
     st.sidebar.error(f"Context Error: {e}")
 
-# -----------------------------
-# MAIN UI LOGIC
-# -----------------------------
-models = get_cached_models()
 
 def process_and_display(frame, main_container, rek_container, mode="BATCH"):
     """Production-grade Rekognition-style Monitoring Logic"""

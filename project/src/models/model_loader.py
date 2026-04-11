@@ -27,19 +27,27 @@ def load_models():
     # 5 channels: RGB (3) + Canny (1) + LBP (1)
     seg = create_deeplabv3plus(in_channels=5, num_classes=NUM_CLASSES)
     
-    v2_weights = PROJECT_ROOT / "project" / "weights" / "best_model_v2.pth"
-    
-    if os.path.exists(v2_weights):
-        # Dynamically load the retrained 5-channel model
-        seg.load_state_dict(torch.load(v2_weights, map_location=DEVICE))
-        print("✅ Loaded V2 weights successfully.")
-    elif os.path.exists(MODEL_PATH):
-        # Handle state dict mismatch if loading from 3-chan model (architecture handles it)
+    seg_status = "Initialized (Fresh)"
+    if os.path.exists(MODEL_PATH):
         try:
             seg.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
+            seg_status = "Loaded Successfully"
+            print(f"✅ Loaded weights from {MODEL_PATH}")
         except Exception as e:
-            print(f"⚠️ Warning: Segmentation weights load partial match: {e}")
+            seg_status = f"Load Error: {e}"
+            print(f"⚠️ Warning: Segmentation weights load error: {e}")
     
     seg.to(DEVICE).eval()
     
-    return {"yolo_custom": yolo_custom, "yolo_coco": yolo_coco, "seg": seg}
+    from config import MODEL_VERSION
+    metadata = {
+        "seg_version": MODEL_VERSION,
+        "seg_status": seg_status,
+        "device": str(DEVICE),
+        "num_classes": NUM_CLASSES
+    }
+    
+    return {
+        "models": {"yolo_custom": yolo_custom, "yolo_coco": yolo_coco, "seg": seg},
+        "metadata": metadata
+    }

@@ -1,0 +1,67 @@
+{
+  "water_p": 100.0,
+  "obj_summary": "cow(1), animal(1)",
+  "risk_level": "DANGEROUS",
+  "risk_score": 75,
+  "telemetry": {
+    "hybrid_conf": 0.7089163422584535,
+    "seg_conf": 0.622922956943512,
+    "yolo_conf": 0.8379064202308655,
+    "top_detections": [
+      {
+        "label": "Animal",
+        "confidence": 0.8379064202308655
+      },
+      {
+        "label": "Cow",
+        "confidence": 0.8379064202308655
+      },
+      {
+        "label": "Flood Water",
+        "confidence": 0.693147599697113
+      },
+      {
+        "label": "Vegetation",
+        "confidence": 0.1804777830839157
+      },
+      {
+        "label": "Road",
+        "confidence": 0.16118773818016052
+      },
+      {
+        "label": "Building",
+        "confidence": 0.15074771642684937
+      },
+      {
+        "label": "Vehicle",
+        "confidence": 0.005127942189574242
+      }
+    ],
+    "yolo_raw": [
+      {
+        "label": "cow",
+        "conf": 0.8379064202308655,
+        "box": [
+          67.05055236816406,
+          73.96096801757812,
+          528.696533203125,
+          411.0709533691406
+        ]
+      },
+      {
+        "label": "animal",
+        "conf": 0.8379064202308655,
+        "box": [
+          67.05055236816406,
+          73.96096801757812,
+          528.696533203125,
+          411.0709533691406
+        ]
+      }
+    ]
+  },
+  "mode": "IMAGE",
+  "user_feedback": "incorrect",
+  "failure_reason": "Wrong flood detection",
+  "timestamp": "2026-04-11T23:11:41.284365"
+}

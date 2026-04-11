@@ -22,7 +22,8 @@ ASSETS_DIR = DATA_ROOT / "assets"
 # -----------------------------
 # MODELS
 # -----------------------------
-MODEL_PATH = WEIGHTS_DIR / "best_model.pth"
+MODEL_PATH = WEIGHTS_DIR / "best_model_v2.pth"
+MODEL_VERSION = "V2-Retrained (5-Channel)"
 YOLO_MODEL_PATH = PROJECT_ROOT / "yolov8n.pt"
 
 # -----------------------------

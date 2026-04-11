@@ -1,0 +1,67 @@
+{
+  "water_p": 14.73046875,
+  "obj_summary": "bird(1), animal(1)",
+  "risk_level": "MEDIUM",
+  "risk_score": 17,
+  "telemetry": {
+    "hybrid_conf": 0.5323998987674713,
+    "seg_conf": 0.3011793792247772,
+    "yolo_conf": 0.8792306780815125,
+    "top_detections": [
+      {
+        "label": "Animal",
+        "confidence": 0.8792306780815125
+      },
+      {
+        "label": "Bird",
+        "confidence": 0.8792306780815125
+      },
+      {
+        "label": "Road",
+        "confidence": 0.439475417137146
+      },
+      {
+        "label": "Flood Water",
+        "confidence": 0.3397303819656372
+      },
+      {
+        "label": "Vegetation",
+        "confidence": 0.3233616352081299
+      },
+      {
+        "label": "Building",
+        "confidence": 0.28489840030670166
+      },
+      {
+        "label": "Vehicle",
+        "confidence": 0.003720964305102825
+      }
+    ],
+    "yolo_raw": [
+      {
+        "label": "bird",
+        "conf": 0.8792306780815125,
+        "box": [
+          33.96795654296875,
+          47.132720947265625,
+          639.3114013671875,
+          471.3013610839844
+        ]
+      },
+      {
+        "label": "animal",
+        "conf": 0.8792306780815125,
+        "box": [
+          33.96795654296875,
+          47.132720947265625,
+          639.3114013671875,
+          471.3013610839844
+        ]
+      }
+    ]
+  },
+  "mode": "IMAGE",
+  "user_feedback": "incorrect",
+  "failure_reason": "Missed object",
+  "timestamp": "2026-04-11T23:12:58.249521"
+}

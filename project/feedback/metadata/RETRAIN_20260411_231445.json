@@ -1,0 +1,87 @@
+{
+  "water_p": 0.0,
+  "obj_summary": "person(4)",
+  "risk_level": "MEDIUM",
+  "risk_score": 15,
+  "telemetry": {
+    "hybrid_conf": 0.41678852438926695,
+    "seg_conf": 0.33324897289276123,
+    "yolo_conf": 0.5420978516340256,
+    "top_detections": [
+      {
+        "label": "Person",
+        "confidence": 0.7579491138458252
+      },
+      {
+        "label": "Building",
+        "confidence": 0.39724618196487427
+      },
+      {
+        "label": "Flood Water",
+        "confidence": 0.3296721875667572
+      },
+      {
+        "label": "Road",
+        "confidence": 0.3214496374130249
+      },
+      {
+        "label": "Vegetation",
+        "confidence": 0.26965129375457764
+      },
+      {
+        "label": "Vehicle",
+        "confidence": 0.15184058248996735
+      },
+      {
+        "label": "Animal",
+        "confidence": 0.009930616244673729
+      }
+    ],
+    "yolo_raw": [
+      {
+        "label": "person",
+        "conf": 0.7579491138458252,
+        "box": [
+          753.5283203125,
+          588.1436157226562,
+          775.26123046875,
+          636.0274658203125
+        ]
+      },
+      {
+        "label": "person",
+        "conf": 0.32624658942222595,
+        "box": [
+          290.3065490722656,
+          573.8447265625,
+          303.6723327636719,
+          613.7012939453125
+        ]
+      },
+      {
+        "label": "person",
+        "conf": 0.7579491138458252,
+        "box": [
+          753.5283203125,
+          588.1436157226562,
+          775.26123046875,
+          636.0274658203125
+        ]
+      },
+      {
+        "label": "person",
+        "conf": 0.32624658942222595,
+        "box": [
+          290.3065490722656,
+          573.8447265625,
+          303.6723327636719,
+          613.7012939453125
+        ]
+      }
+    ]
+  },
+  "mode": "IMAGE",
+  "user_feedback": "incorrect",
+  "failure_reason": "Wrong flood detection",
+  "timestamp": "2026-04-11T23:14:45.854730"
+}
