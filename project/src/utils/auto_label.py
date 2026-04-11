@@ -8,6 +8,11 @@ from pathlib import Path
 from multiprocessing import Pool, cpu_count
 from ultralytics import FastSAM
 
+# Add project/src to sys.path
+src_dir = str(Path(__file__).resolve().parents[1])
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
 from config import CLEAN_DIR, IMG_SIZE, CLASSES, PROJECT_ROOT
 
 # ---------------- DEVICE ----------------

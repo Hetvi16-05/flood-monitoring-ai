@@ -5,14 +5,10 @@ import sys
 from pathlib import Path
 from tqdm import tqdm
 
-# Add project root to sys.path to allow absolute imports
-# project/src/preprocessing/preprocess.py -> project_root is 3 levels up
-project_root = str(Path(__file__).resolve().parents[3])
-print(f"DEBUG: __file__ = {__file__}")
-print(f"DEBUG: project_root = {project_root}")
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-    print(f"DEBUG: Inserted {project_root} into sys.path")
+# Add project/src to sys.path to allow imports from project/src
+src_dir = str(Path(__file__).resolve().parents[1])
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
 
 from config import RAW_DIR, CLEAN_DIR, IMG_SIZE
 from preprocessing.image_processing import resize_image, normalize_image

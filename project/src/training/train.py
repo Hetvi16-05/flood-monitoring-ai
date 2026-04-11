@@ -1,4 +1,5 @@
 import os
+import sys
 import csv
 import torch
 import torch.nn as nn
@@ -9,13 +10,18 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from pathlib import Path
 
+# Add project/src to sys.path
+src_dir = str(Path(__file__).resolve().parents[1])
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
 from models.dataset import SegmentationDataset
 from models.segmentation_v2 import create_deeplabv3plus
 from preprocessing.augment import get_production_augmentations
 from config import (
     EPOCHS,
     LEARNING_RATE,
-    NUM_CLASSES,
+    NUM_CLASSES,    
     WEIGHTS_DIR,
     LOGS_DIR,
     SPLIT_DIR

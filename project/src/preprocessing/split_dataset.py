@@ -5,10 +5,10 @@ from tqdm import tqdm
 import sys
 from pathlib import Path
 
-# Add project root to sys.path
-project_root = str(Path(__file__).resolve().parents[3])
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# Add project/src to sys.path
+src_dir = str(Path(__file__).resolve().parents[1])
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
 
 from config import CLEAN_DIR, SPLIT_DIR
 
