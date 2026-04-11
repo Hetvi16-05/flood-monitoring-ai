@@ -14,8 +14,22 @@ from datetime import datetime
 ROOT = Path(__file__).resolve().parents[2]   # project/
 SRC = ROOT / "src"
 
+# --- INITIALIZE STATE IMMEDIATELY ---
+st.set_page_config(page_title="RAINWISE Flood AI", page_icon="🌊", layout="wide")
+
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+
+if 'risk_history' not in st.session_state:
+    st.session_state.risk_history = []
+if 'conf_history' not in st.session_state:
+    st.session_state.conf_history = []
+if 'last_alert_time' not in st.session_state:
+    st.session_state.last_alert_time = 0
+if 'last_telemetry' not in st.session_state:
+    st.session_state.last_telemetry = None
+if 'yt_video_path' not in st.session_state:
+    st.session_state.yt_video_path = None
 
 from config import (
     YOLO_MODEL_PATH, MODEL_PATH, DEVICE, ALERT_SOUND_PATH,
@@ -37,21 +51,11 @@ try:
 except:
     pygame = None
 
-# -----------------------------
-# PAGE CONFIG
-# -----------------------------
-st.set_page_config(page_title="RAINWISE Flood AI", page_icon="🌊", layout="wide")
 st.title("🌧️ RAINWISE Flood Monitoring AI")
 
 @st.cache_resource
 def get_cached_models():
     return load_models()
-if 'conf_history' not in st.session_state:
-    st.session_state.conf_history = []
-if 'last_alert_time' not in st.session_state:
-    st.session_state.last_alert_time = 0
-if 'last_telemetry' not in st.session_state:
-    st.session_state.last_telemetry = None
 
 # --- UTILS ---
 def get_conf_color(conf):
@@ -214,11 +218,48 @@ with tab_img:
 
 # --- VIDEO TAB ---
 with tab_vid:
-    vid_file = st.file_uploader("Upload Video", type=["mp4", "mov", "avi"], key="vid_up")
+    st.subheader("🎥 Intelligent Video Analysis")
+    c1, c2 = st.columns([2, 1])
+    
+    with c1:
+        vid_file = st.file_uploader("Upload Video", type=["mp4", "mov", "avi"], key="vid_up")
+        
+    with c2:
+        st.markdown("🔗 **Cloud Import**")
+        yt_url = st.text_input("YouTube URL", placeholder="https://youtube.com/watch?v=...")
+        if st.button("📥 Download & Process"):
+            if yt_url:
+                with st.spinner("📦 Downloading YouTube Stream..."):
+                    import yt_dlp
+                    ydl_opts = {
+                        'format': 'best[ext=mp4]',
+                        'outtmpl': 'project/test_videos/%(title)s.%(ext)s',
+                        'noplaylist': True,
+                    }
+                    try:
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            info = ydl.extract_info(yt_url, download=True)
+                            yt_path = ydl.prepare_filename(info)
+                            st.success(f"✅ Downloaded: {info['title']}")
+                            st.session_state.yt_video_path = yt_path
+                    except Exception as e:
+                        st.error(f"Download Error: {e}")
+            else:
+                st.warning("Please enter a valid URL")
+
+    # Determine which video to use
+    active_vid_path = None
     if vid_file:
         tmp_path = "tmp_video.mp4"
         with open(tmp_path, "wb") as f: f.write(vid_file.read())
-        cap = cv2.VideoCapture(tmp_path)
+        active_vid_path = tmp_path
+    elif 'yt_video_path' in st.session_state:
+        if st.session_state.yt_video_path and os.path.exists(st.session_state.yt_video_path):
+            active_vid_path = st.session_state.yt_video_path
+            st.info(f"Using Cloud Video: {os.path.basename(active_vid_path)}")
+
+    if active_vid_path:
+        cap = cv2.VideoCapture(active_vid_path)
         
         col_main, col_rek = st.columns([3, 1])
         v_main = col_main.empty()

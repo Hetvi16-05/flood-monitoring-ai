@@ -98,11 +98,11 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True):
     
     # 2. 5-CHANNEL SEGMENTATION
     img_resized = cv2.resize(img_rgb, INF_SIZE)
-    hybrid_feat = extract_hybrid_features(img_resized)
+    hybrid_feat = extract_hybrid_features(img_resized).astype(np.float32)
     img_norm = img_resized.astype(np.float32) / 255.0
-    combined = np.concatenate([img_norm, hybrid_feat], axis=-1)
+    combined = np.concatenate([img_norm, hybrid_feat], axis=-1).astype(np.float32)
     
-    tensor = torch.from_numpy(combined).permute(2, 0, 1).unsqueeze(0).to(DEVICE)
+    tensor = torch.from_numpy(combined).float().permute(2, 0, 1).unsqueeze(0).to(DEVICE)
     with torch.no_grad():
         out = seg(tensor)
         probs = torch.softmax(out, dim=1) # (1, C, H, W)
