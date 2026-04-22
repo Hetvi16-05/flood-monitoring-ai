@@ -40,7 +40,8 @@ def process_video(input_path):
         return
 
     logger.info(f"Processing video: {input_path}")
-    yolo, seg = load_models()
+    model_bundle = load_models()
+    models = model_bundle["models"]
     
     lat, lon, city = get_location()
     rain = get_rainfall(lat, lon)
@@ -61,14 +62,14 @@ def process_video(input_path):
         if not ret: break
         
         # Standardized Inference
-        frame_out, water_p, objects, animals, risk = run_hybrid(frame, yolo, seg)
+        frame_out, water_p, objects, risk_level, risk_score, telemetry = run_hybrid(frame, models)
         
         # Logging
-        log_to_csv(water_p, objects, animals, rain, risk, city)
+        log_to_csv(water_p, objects, risk_level, rain, risk_score, city)
         
         # Alert
-        if risk in ["FLOOD", "DANGER"]:
-            cv2.putText(frame_out, f"{risk} ALERT", (width//2-150, height-50), 
+        if risk_level in ["HIGH", "DANGEROUS"]:
+            cv2.putText(frame_out, f"{risk_level} ALERT", (width//2-150, height-50), 
                         cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 4)
             play_alert()
 

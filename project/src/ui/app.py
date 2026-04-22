@@ -115,9 +115,9 @@ except Exception as e:
     st.sidebar.error(f"Context Error: {e}")
 
 
-def process_and_display(frame, main_container, rek_container, mode="BATCH"):
+def process_and_display(frame, main_container, rek_container, mode="BATCH", lat=None, lon=None):
     """Production-grade Rekognition-style Monitoring Logic"""
-    res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_hybrid(frame, models, show_yolo, show_mask)
+    res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_hybrid(frame, models, show_yolo, show_mask, lat, lon)
     
     hybrid_conf = telemetry['hybrid_conf']
     st.session_state.last_frame = frame.copy()
@@ -153,12 +153,56 @@ def process_and_display(frame, main_container, rek_container, mode="BATCH"):
         """, unsafe_allow_html=True)
         
         st.divider()
-        st.markdown("#### 🏷️ Detected Labels")
-        for det in telemetry['top_detections'][:5]: # Show top 5
-            c1, c2 = st.columns([3, 1])
-            c1.markdown(f"**{det['label']}**")
-            c2.markdown(f"`{det['confidence']:.1%}`")
-            st.progress(det['confidence'])
+        
+        # Water Depth Information (NEW)
+        if telemetry.get('avg_water_depth', 0) > 0:
+            st.markdown("#### 📏 Water Depth")
+            c1, c2 = st.columns([1, 1])
+            c1.metric("Avg Depth", f"{telemetry['avg_water_depth']:.2f}m")
+            c2.metric("Max Depth", f"{telemetry['max_water_depth']:.2f}m")
+            if telemetry.get('depth_risk_level'):
+                depth_color = '🔴' if telemetry['depth_risk_level'] == 'DANGEROUS' else '🟠' if telemetry['depth_risk_level'] == 'HIGH' else '🟡' if telemetry['depth_risk_level'] == 'MEDIUM' else '🟢'
+                st.markdown(f"Depth Risk: {depth_color} **{telemetry['depth_risk_level']}**")
+        
+        st.divider()
+        
+        # Temporal Flood Tracking Information (NEW)
+        if telemetry.get('expansion_rate', 0) != 0:
+            st.markdown("#### ⏱️ Flood Progression")
+            c1, c2 = st.columns([1, 1])
+            c1.metric("Expansion Rate", f"{telemetry['expansion_rate']*100:.1f}%")
+            c2.metric("Direction", telemetry['flood_direction'].upper())
+            if telemetry.get('temporal_risk_level'):
+                temporal_color = '🔴' if telemetry['temporal_risk_level'] == 'DANGEROUS' else '🟠' if telemetry['temporal_risk_level'] == 'HIGH' else '🟡' if telemetry['temporal_risk_level'] == 'MEDIUM' else '🟢'
+                st.markdown(f"Temporal Risk: {temporal_color} **{telemetry['temporal_risk_level']}**")
+            if telemetry.get('temporal_insights'):
+                st.markdown("**Insights:**")
+                for insight in telemetry['temporal_insights']:
+                    st.markdown(f"• {insight}")
+        
+        st.divider()
+        
+        # Predictive Forecasting Information (NEW)
+        if telemetry.get('predictive_risk_level'):
+            st.markdown("#### 🔮 Flood Prediction")
+            c1, c2 = st.columns([1, 1])
+            c1.metric("Risk Level", telemetry['predictive_risk_level'])
+            c2.metric("Hours Ahead", f"{telemetry['prediction_hours']}h")
+            pred_color = '🔴' if telemetry['predictive_risk_level'] == 'DANGEROUS' else '🟠' if telemetry['predictive_risk_level'] == 'HIGH' else '🟡' if telemetry['predictive_risk_level'] == 'MEDIUM' else '🟢'
+            st.markdown(f"Prediction: {pred_color} **{telemetry['predictive_risk_level']}**")
+            if telemetry.get('prediction_factors'):
+                st.markdown("**Factors:**")
+                for factor in telemetry['prediction_factors']:
+                    st.markdown(f"• {factor}")
+        
+        st.divider()
+        # Detected Labels section removed per user request
+        # st.markdown("#### 🏷️ Detected Labels")
+        # for det in telemetry['top_detections'][:5]: # Show top 5
+        #     c1, c2 = st.columns([3, 1])
+        #     c1.markdown(f"**{det['label']}**")
+        #     c2.markdown(f"`{det['confidence']:.1%}`")
+        #     st.progress(det['confidence'])
 
         st.divider()
         st.markdown("#### 📈 Confidence Trend")
@@ -221,7 +265,11 @@ with tab_img:
         image = Image.open(img_file).convert("RGB")
         frame = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
         col_main, col_rek = st.columns([3, 1])
-        process_and_display(frame, col_main, col_rek, mode="IMAGE")
+        try:
+            process_and_display(frame, col_main, col_rek, mode="IMAGE", lat=lat, lon=lon)
+        except NameError:
+            # lat/lon not available (location fetch failed)
+            process_and_display(frame, col_main, col_rek, mode="IMAGE")
         
         st.divider()
         st.subheader("🗣️ Active Learning Feedback")
@@ -290,7 +338,10 @@ with tab_vid:
                 ret, frame = cap.read()
                 if not ret: break
                 if f_count % frame_skip == 0:
-                    process_and_display(frame, v_main, v_rek, mode="VIDEO")
+                    try:
+                        process_and_display(frame, v_main, v_rek, mode="VIDEO", lat=lat, lon=lon)
+                    except NameError:
+                        process_and_display(frame, v_main, v_rek, mode="VIDEO")
                 f_count += 1
             cap.release()
         
@@ -328,7 +379,10 @@ with tab_cctv:
                 ret, frame = cap.read()
                 if not ret: break
                 if f_count % frame_skip == 0:
-                    process_and_display(frame, c_main, c_rek, mode="CCTV LIVE")
+                    try:
+                        process_and_display(frame, c_main, c_rek, mode="CCTV LIVE", lat=lat, lon=lon)
+                    except NameError:
+                        process_and_display(frame, c_main, c_rek, mode="CCTV LIVE")
                 f_count += 1
             cap.release()
         except Exception as e:

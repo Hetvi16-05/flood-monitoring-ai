@@ -1,8 +1,20 @@
 import os
+import sys
 import torch
+from pathlib import Path
 from ultralytics import YOLO
+
+# Add src to path for imports
+SRC_DIR = Path(__file__).resolve().parent.parent
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
 from config import DEVICE, NUM_CLASSES, MODEL_PATH, YOLO_MODEL_PATH, PROJECT_ROOT
 from models.segmentation_v2 import create_deeplabv3plus
+from models.crocodile_detector import CrocodileDetector, get_default_crocodile_model_path
+from models.depth_estimator import DepthEstimator
+from models.temporal_tracker import TemporalFloodTracker
+from models.predictive_forecaster import PredictiveForecaster, get_default_weather_api_key
 
 def load_models():
     """
@@ -11,6 +23,10 @@ def load_models():
     1. Custom YOLOv8 (Flood specific)
     2. COCO YOLOv8 (General objects)
     3. DeepLabV3+ (5-channel segmentation)
+    4. Crocodile Detector (Specialized)
+    5. Depth Estimator (Water depth assessment)
+    6. Temporal Flood Tracker (Flood progression analysis)
+    7. Predictive Forecaster (Weather-based flood prediction)
     """
     # 1. Dual YOLO Initialization
     # We use the same YOLO_MODEL_PATH for coco if not separately defined
@@ -39,15 +55,33 @@ def load_models():
     
     seg.to(DEVICE).eval()
     
+    # 4. Crocodile Detector (Specialized)
+    croc_model_path = get_default_crocodile_model_path()
+    croc_detector = CrocodileDetector(model_path=str(croc_model_path), device=str(DEVICE), conf_threshold=0.3)
+    
+    # 5. Depth Estimator (Water depth assessment)
+    depth_estimator = DepthEstimator(model_type='DPT_Hybrid', device=str(DEVICE))
+    
+    # 6. Temporal Flood Tracker (Flood progression analysis)
+    temporal_tracker = TemporalFloodTracker(history_length=30)
+    
+    # 7. Predictive Forecaster (Weather-based flood prediction)
+    api_key = get_default_weather_api_key()
+    predictive_forecaster = PredictiveForecaster(api_key=api_key, history_length=24)
+    
     from config import MODEL_VERSION
     metadata = {
         "seg_version": MODEL_VERSION,
         "seg_status": seg_status,
         "device": str(DEVICE),
-        "num_classes": NUM_CLASSES
+        "num_classes": NUM_CLASSES,
+        "croc_detector": "Loaded" if croc_detector.model else "Not Available",
+        "depth_estimator": "Loaded" if depth_estimator.model else "Not Available",
+        "temporal_tracker": "Loaded",
+        "predictive_forecaster": "Loaded" if api_key else "No API Key"
     }
     
     return {
-        "models": {"yolo_custom": yolo_custom, "yolo_coco": yolo_coco, "seg": seg},
+        "models": {"yolo_custom": yolo_custom, "yolo_coco": yolo_coco, "seg": seg, "croc_detector": croc_detector, "depth_estimator": depth_estimator, "temporal_tracker": temporal_tracker, "predictive_forecaster": predictive_forecaster},
         "metadata": metadata
     }

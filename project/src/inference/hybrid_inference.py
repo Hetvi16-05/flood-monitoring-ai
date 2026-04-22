@@ -42,6 +42,7 @@ from config import (
 # -----------------------------
 
 from utils.risk import get_flood_risk
+from models.crocodile_detector import CrocodileDetector, get_default_crocodile_model_path
 
 def load_segmentation_model(path, num_classes, device):
     model = models.segmentation.lraspp_mobilenet_v3_large(num_classes=num_classes)
@@ -88,10 +89,10 @@ def format_objects(detected_objects):
 # CORE LOGIC
 # -----------------------------
 
-def process_frame(frame, seg_model, yolo_model, mode="IMAGE"):
+def process_frame(frame, seg_model, yolo_model, croc_detector=None, mode="IMAGE"):
     h, w = frame.shape[:2]
     
-    # 1. YOLO
+    # 1. YOLO Detection
     yolo_results = yolo_model.predict(frame, conf=YOLO_CONF_THRESHOLD, verbose=False)[0]
     detected_objects = []
     for box in yolo_results.boxes:
@@ -111,6 +112,11 @@ def process_frame(frame, seg_model, yolo_model, mode="IMAGE"):
             "box": box.xyxy[0].cpu().numpy().astype(int),
             "conf": float(box.conf[0])
         })
+    
+    # 1.5. Crocodile Detection (Specialized)
+    if croc_detector:
+        croc_detections = croc_detector.detect(frame)
+        detected_objects.extend(croc_detections)
 
     # 2. Segmentation
     img_tensor = cv2.resize(frame, IMG_SIZE)
@@ -134,6 +140,7 @@ def process_frame(frame, seg_model, yolo_model, mode="IMAGE"):
         has_person=any(obj['type'] == 'person' for obj in detected_objects),
         has_animal=any(obj['type'] == 'animal' for obj in detected_objects),
         has_vehicle=any(obj['type'] == 'vehicle' for obj in detected_objects),
+        has_crocodile=any(obj['type'] == 'crocodile' for obj in detected_objects),
         total_objects=len(detected_objects)
     )
     
@@ -163,8 +170,14 @@ def process_frame(frame, seg_model, yolo_model, mode="IMAGE"):
     # Draw Bounding Boxes
     for obj in detected_objects:
         x1, y1, x2, y2 = obj['box']
-        cv2.rectangle(output_viz, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(output_viz, f"{obj['name']}", (x1, y1-5), font, 0.5, (0, 255, 0), 2)
+        
+        # Special highlighting for crocodiles
+        if obj['type'] == 'crocodile':
+            cv2.rectangle(output_viz, (x1, y1), (x2, y2), (0, 0, 255), 3)  # Red thick box
+            cv2.putText(output_viz, f"🐊 CROCODILE {obj['conf']:.1%}", (x1, y1-5), font, 0.6, (0, 0, 255), 2)
+        else:
+            cv2.rectangle(output_viz, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(output_viz, f"{obj['name']}", (x1, y1-5), font, 0.5, (0, 255, 0), 2)
         
     return output_viz
 
@@ -172,7 +185,7 @@ def process_frame(frame, seg_model, yolo_model, mode="IMAGE"):
 # APP MODES
 # -----------------------------
 
-def run_live_alert(seg_model, yolo_model, source=0):
+def run_live_alert(seg_model, yolo_model, croc_detector=None, source=0):
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         print(f"❌ Could not open camera source: {source}")
@@ -185,7 +198,7 @@ def run_live_alert(seg_model, yolo_model, source=0):
         if not ret: break
         
         mode_label = "CCTV LIVE" if source != 0 else "WEBCAM LIVE"
-        result = process_frame(frame, seg_model, yolo_model, mode=mode_label)
+        result = process_frame(frame, seg_model, yolo_model, croc_detector, mode=mode_label)
         
         cv2.imshow("RAINWISE Live Flood Alert", result)
         
@@ -195,7 +208,7 @@ def run_live_alert(seg_model, yolo_model, source=0):
     cap.release()
     cv2.destroyAllWindows()
 
-def run_batch_test(seg_model, yolo_model):
+def run_batch_test(seg_model, yolo_model, croc_detector=None):
     test_dir = os.path.join(project_root, "project", "test_samples")
     output_dir = os.path.join(OUTPUT_DIR, "hybrid_results")
     os.makedirs(output_dir, exist_ok=True)
@@ -209,7 +222,7 @@ def run_batch_test(seg_model, yolo_model):
     
     for img_name in images:
         frame = cv2.imread(os.path.join(test_dir, img_name))
-        result = process_frame(frame, seg_model, yolo_model, mode="BATCH")
+        result = process_frame(frame, seg_model, yolo_model, croc_detector, mode="BATCH")
         cv2.imwrite(os.path.join(output_dir, img_name), result)
         print(f"✅ Saved results for: {img_name}")
 
@@ -221,6 +234,10 @@ if __name__ == "__main__":
     seg_model = load_segmentation_model(MODEL_PATH, NUM_CLASSES, DEVICE)
     yolo_model = YOLO("yolov8n.pt")
     
+    # Initialize Crocodile Detector
+    croc_model_path = get_default_crocodile_model_path()
+    croc_detector = CrocodileDetector(model_path=str(croc_model_path), device=DEVICE, conf_threshold=0.3)
+    
     print("\n--- RAINWISE HYBRID INFERENCE ---")
     print("1. Run Batch Test (project/test_samples)")
     print("2. Run Live Webcam Mode")
@@ -229,12 +246,12 @@ if __name__ == "__main__":
     choice = input("\nEnter choice (1/2/3): ").strip()
     
     if choice == '1':
-        run_batch_test(seg_model, yolo_model)
+        run_batch_test(seg_model, yolo_model, croc_detector)
     elif choice == '2':
-        run_live_alert(seg_model, yolo_model, source=0)
+        run_live_alert(seg_model, yolo_model, croc_detector, source=0)
     elif choice == '3':
         # Example CCTV feed or use common RTSP placeholder
         url = input("Enter RTSP/HTTP URL (default 0 for webcam): ") or 0
-        run_live_alert(seg_model, yolo_model, source=url)
+        run_live_alert(seg_model, yolo_model, croc_detector, source=url)
     else:
         print("Invalid choice.")
