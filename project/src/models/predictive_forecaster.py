@@ -41,8 +41,8 @@ class PredictiveForecaster:
         Returns:
             forecast_data: Weather forecast data
         """
-        if not self.api_key:
-            return None
+        if not self.api_key or self.api_key == "your_openweathermap_api_key":
+            return self._generate_mock_weather_data()
         
         try:
             params = {
@@ -86,6 +86,41 @@ class PredictiveForecaster:
             forecast.append(forecast_item)
         
         return forecast
+
+    def _generate_mock_weather_data(self):
+        """
+        Generate realistic mock weather data for demonstration purposes
+        """
+        mock_data = []
+        base_time = datetime.now()
+        
+        # Current conditions
+        mock_data.append({
+            'timestamp': base_time,
+            'rainfall': 15.5,
+            'temperature': 28.5,
+            'humidity': 88,
+            'wind_speed': 12.5,
+            'pressure': 1005
+        })
+        
+        # Forecast for next 24 hours (every 3 hours)
+        for i in range(1, 8):
+            time_offset = i * 3
+            # Increase rainfall for next 6-9 hours
+            rainfall = 25.0 if 3 <= time_offset <= 9 else 5.0
+            
+            mock_data.append({
+                'timestamp': base_time + timedelta(hours=time_offset),
+                'rainfall': rainfall,
+                'temperature': 26.0 - (i * 0.5),
+                'humidity': min(95, 88 + (i * 1)),
+                'wind_speed': 15.0 + i,
+                'pressure': 1005 - i
+            })
+            
+        print("💡 Using MOCK weather data (No API Key provided)")
+        return mock_data
     
     def calculate_flood_probability(self, weather_data, current_risk_score):
         """

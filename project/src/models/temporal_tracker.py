@@ -75,11 +75,15 @@ class TemporalFloodTracker:
             self.prev_frame = frame.copy()
             return None
         
-        # Convert to grayscale
+        # 1. Convert to grayscale
         prev_gray = cv2.cvtColor(self.prev_frame, cv2.COLOR_BGR2GRAY)
         curr_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
-        # Calculate dense optical flow
+        # 2. Handle size mismatch (resize current to match previous)
+        if prev_gray.shape != curr_gray.shape:
+            curr_gray = cv2.resize(curr_gray, (prev_gray.shape[1], prev_gray.shape[0]))
+        
+        # 3. Calculate dense optical flow
         flow = cv2.calcOpticalFlowFarneback(
             prev_gray, curr_gray, None, **self.farneback_params
         )

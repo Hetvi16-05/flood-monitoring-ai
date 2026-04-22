@@ -116,12 +116,20 @@ class DepthEstimator:
             return 0.0, 0.0, None
         
         # Ensure both water_mask and depth_values have the same shape
-        # Resize water_mask to match depth_values
+        # 1. Flatten depth_values if needed (ensure 2D: H, W)
+        if len(depth_values.shape) > 2:
+            depth_values = np.squeeze(depth_values)
+            
+        # 2. Flatten water_mask if needed (ensure 2D: H, W)
+        if len(water_mask.shape) > 2:
+            water_mask = np.squeeze(water_mask)
+            
+        # 3. Resize water_mask to match depth_values exactly
         if water_mask.shape != depth_values.shape:
             water_mask = cv2.resize(water_mask, (depth_values.shape[1], depth_values.shape[0]), 
                                    interpolation=cv2.INTER_NEAREST)
         
-        # Extract depth values in water regions only
+        # 4. Extract depth values in water regions only
         try:
             water_depths = depth_values[water_mask > 0]
         except IndexError as e:

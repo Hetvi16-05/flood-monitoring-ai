@@ -173,29 +173,30 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
     # 4. RISK ENGINE
     water_p = calculate_water_area(pred)
     
-    # 4a. Water Depth Estimation (if available)
+    # 4a. Water Depth Estimation
     avg_water_depth = 0.0
     max_water_depth = 0.0
-    depth_risk_level = None
+    depth_risk_level = "LOW"
     depth_risk_score = 0
     
-    # Temporarily disabled due to shape mismatch issue
-    # TODO: Fix water_mask to depth_values shape alignment
-    # if depth_estimator:
-    #     flood_mask = (pred == 0).astype(np.uint8)
-    #     avg_water_depth, max_water_depth, depth_map = depth_estimator.get_water_depth(frame, flood_mask)
-    #     depth_risk_level, depth_risk_score = depth_estimator.get_depth_risk_level(avg_water_depth, max_water_depth)
+    if depth_estimator:
+        flood_mask = (pred == 0).astype(np.uint8)
+        avg_water_depth, max_water_depth, depth_map = depth_estimator.get_water_depth(frame, flood_mask)
+        depth_risk_level, depth_risk_score = depth_estimator.get_depth_risk_level(avg_water_depth, max_water_depth)
     
-    # 4b. Temporal Flood Tracking (if available) - DISABLED
-    temporal_risk_level = None
+    # 4b. Temporal Flood Tracking
+    temporal_risk_level = "LOW"
     temporal_risk_score = 0
     temporal_insights = []
     expansion_rate = 0.0
     flood_direction = "unknown"
     
-    # Temporarily disabled due to optical flow size mismatch
-    # TODO: Fix frame size alignment for optical flow
-    # The temporal tracker is causing frame size errors in optical flow calculation
+    if temporal_tracker:
+        flood_mask = (pred == 0).astype(np.uint8)
+        flow_data, progression_stats = temporal_tracker.update(frame, flood_mask)
+        expansion_rate = progression_stats['expansion_rate']
+        flood_direction = progression_stats['direction']
+        temporal_risk_level, temporal_risk_score, temporal_insights = temporal_tracker.get_temporal_risk_assessment()
     
     # 4c. Predictive Forecasting (if available)
     predictive_risk_level = None
@@ -204,11 +205,20 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
     prediction_factors = []
     
     if predictive_forecaster and lat and lon:
+        # Pass current base risk score to forecast
         prediction = predictive_forecaster.predict_flood_risk(lat, lon, risk_score)
         predictive_risk_level = prediction['level']
         predictive_risk_score = int(prediction['probability'] * 100)
         prediction_hours = prediction['hours_ahead']
         prediction_factors = prediction['risk_factors']
+    elif predictive_forecaster:
+        # Use demo mode (mock data) even if lat/lon missing for UI preview
+        prediction = predictive_forecaster.predict_flood_risk(22.3, 73.2, risk_score)
+        predictive_risk_level = prediction['level']
+        predictive_risk_score = int(prediction['probability'] * 100)
+        prediction_hours = prediction['hours_ahead']
+        prediction_factors = prediction['risk_factors']
+        prediction_factors.append("DEMO MODE: Using default location")
     
     # 4d. Base Risk Calculation
     risk_level, risk_score = get_flood_risk(
