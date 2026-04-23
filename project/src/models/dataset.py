@@ -42,16 +42,11 @@ class SegmentationDataset(Dataset):
             mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
         else:
             mask = np.full((img.shape[0], img.shape[1]), label, dtype=np.uint8)
-
-        # 2. APPLY AUGMENTATIONS (ALBUMENTATIONS)
         if self.transform:
             img, mask = apply_augmentations(img, mask, self.transform)
         else:
             img = cv2.resize(img, IMG_SIZE, interpolation=cv2.INTER_LINEAR)
             mask = cv2.resize(mask, IMG_SIZE, interpolation=cv2.INTER_NEAREST)
-
-        # 3. FEATURE ENGINEERING (spatial + texture)
-        # We extract features AFTER augmentations or ON THE FLY to ensure 5-channel consistency
         hybrid_features = extract_hybrid_features(img) # Extracts Canny and LBP
         
         # Merge: RGB (3) + Hybrid (2) = 5 Channels

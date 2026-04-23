@@ -182,19 +182,6 @@ def process_and_display(frame, main_container, rek_container, mode="BATCH", lat=
         
         st.divider()
         
-        # Predictive Forecasting Information (NEW)
-        if telemetry.get('predictive_risk_level'):
-            st.markdown("#### 🔮 Flood Prediction")
-            c1, c2 = st.columns([1, 1])
-            c1.metric("Risk Level", telemetry['predictive_risk_level'])
-            c2.metric("Hours Ahead", f"{telemetry['prediction_hours']}h")
-            pred_color = '🔴' if telemetry['predictive_risk_level'] == 'DANGEROUS' else '🟠' if telemetry['predictive_risk_level'] == 'HIGH' else '🟡' if telemetry['predictive_risk_level'] == 'MEDIUM' else '🟢'
-            st.markdown(f"Prediction: {pred_color} **{telemetry['predictive_risk_level']}**")
-            if telemetry.get('prediction_factors'):
-                st.markdown("**Factors:**")
-                for factor in telemetry['prediction_factors']:
-                    st.markdown(f"• {factor}")
-        
         st.divider()
         # Detected Labels section removed per user request
         # st.markdown("#### 🏷️ Detected Labels")

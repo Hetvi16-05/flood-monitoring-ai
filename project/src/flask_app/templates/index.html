@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAINWISE Flood AI | Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="icon">🌊</span>
+                <h1>RAINWISE AI</h1>
+            </div>
+            
+            <nav class="menu">
+                <div class="menu-item active" onclick="showSection('dashboard', this)">
+                    <span class="icon">📊</span>
+                    <span>Dashboard</span>
+                </div>
+                <div class="menu-item" onclick="showSection('upload', this)">
+                    <span class="icon">📤</span>
+                    <span>Image Analysis</span>
+                </div>
+                <div class="menu-item" onclick="showSection('settings', this)">
+                    <span class="icon">⚙️</span>
+                    <span>Settings</span>
+                </div>
+            </nav>
+
+            <div class="environmental-hub">
+                <h3>🌍 Environmental Hub</h3>
+                <div class="env-item">
+                    <span class="label">Location</span>
+                    <span class="value" id="city-name">{{ city }}</span>
+                </div>
+                <div class="env-item">
+                    <span class="label">Rainfall</span>
+                    <span class="value" id="rainfall-mm">{{ rain }} mm</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <div class="header-left">
+                    <h2>Live Flood Surveillance</h2>
+                    <p class="subtitle">System Status: <span class="status-badge pulse">Real-time Monitoring</span></p>
+                </div>
+                <div class="header-right">
+                    <div class="datetime" id="current-time"></div>
+                </div>
+            </header>
+
+            <!-- Dashboard Section -->
+            <section id="dashboard-section" class="content-section">
+                <div class="dashboard-grid">
+                    <!-- Live Feed -->
+                    <div class="card video-card">
+                        <div class="card-header">
+                            <h3>📡 CCTV Live Stream</h3>
+                            <div class="controls">
+                                <button class="btn btn-sm" onclick="toggleStream()">Start/Stop Stream</button>
+                            </div>
+                        </div>
+                        <div class="video-container">
+                            <img id="video-feed" src="" alt="Stream waiting..." class="live-feed">
+                        </div>
+                    </div>
+
+                    <!-- Telemetry Cards -->
+                    <div class="telemetry-grid">
+                        <div class="card telemetry-card risk-card">
+                            <h3>Risk Level</h3>
+                            <div class="value-container">
+                                <span class="risk-value" id="risk-level">INITIALIZING</span>
+                                <span class="risk-score" id="risk-score">0</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar" id="risk-progress" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div class="card telemetry-card">
+                            <h3>Water Area</h3>
+                            <div class="value-container">
+                                <span class="tele-value" id="water-percent">0.0%</span>
+                            </div>
+                        </div>
+
+                        <div class="card telemetry-card">
+                            <h3>Water Depth (Avg)</h3>
+                            <div class="value-container">
+                                <span class="tele-value" id="avg-depth">0.00m</span>
+                            </div>
+                        </div>
+                        
+                        <div class="card telemetry-card">
+                            <h3>Expansion Rate</h3>
+                            <div class="value-container">
+                                <span class="tele-value" id="expansion-rate">0.0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Area -->
+                    <div class="card chart-card">
+                        <h3>📈 Risk & Confidence Trend</h3>
+                        <canvas id="mainChart"></canvas>
+                    </div>
+
+                    <!-- Insights / Alerts -->
+                    <div class="card insights-card">
+                        <h3>🎯 Real-Time Insights</h3>
+                        <div id="insights-list" class="insights-list">
+                            <p class="no-data">Waiting for analysis...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Upload Section -->
+            <section id="upload-section" class="content-section hidden">
+                <div class="card upload-card">
+                    <h3>📷 Image & Video Analysis</h3>
+                    <div class="upload-grid">
+                        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+                            <p>📷 Upload Image</p>
+                            <input type="file" id="file-input" hidden accept="image/*" onchange="handleImageUpload(this.files[0])">
+                        </div>
+                        <div class="upload-zone" id="video-upload-zone" onclick="document.getElementById('video-input').click()">
+                            <p>🎥 Upload Local Video</p>
+                            <input type="file" id="video-input" hidden accept="video/*" onchange="handleVideoUpload(this.files[0])">
+                        </div>
+                    </div>
+                    <div id="upload-results" class="upload-results hidden">
+                        <img id="result-img" class="result-img">
+                        <div id="result-data"></div>
+                    </div>
+                </div>
+
+                <div class="card cloud-card" style="margin-top: 1.5rem;">
+                    <h3>🌐 Cloud Video Analysis</h3>
+                    <div class="cloud-input-group">
+                        <input type="text" id="yt-url" placeholder="Enter YouTube URL..." class="form-input">
+                        <button class="btn" onclick="processYoutube()">Download & Process</button>
+                    </div>
+                    <p id="cloud-status" class="subtitle" style="margin-top: 1rem;"></p>
+                </div>
+            </section>
+            <!-- Settings Section -->
+            <section id="settings-section" class="content-section hidden">
+                <div class="card settings-card">
+                    <h3>⚙️ System Configuration</h3>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <strong>Visualization</strong>
+                                <p>Control what AI overlays are visible on the feed</p>
+                            </div>
+                            <div class="setting-controls">
+                                <label class="switch">
+                                    <input type="checkbox" id="show-yolo" checked onchange="updateSettings()">
+                                    <span class="slider round"></span>
+                                </label>
+                                <span>Show Object Boxes</span>
+                            </div>
+                            <div class="setting-controls" style="margin-top: 1rem;">
+                                <label class="switch">
+                                    <input type="checkbox" id="show-mask" checked onchange="updateSettings()">
+                                    <span class="slider round"></span>
+                                </label>
+                                <span>Show Flood Mask</span>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <strong>Alerts & Notifications</strong>
+                                <p>Manage how the system notifies you of critical events</p>
+                            </div>
+                            <div class="setting-controls">
+                                <label class="switch">
+                                    <input type="checkbox" id="enable-sound" checked onchange="updateSettings()">
+                                    <span class="slider round"></span>
+                                </label>
+                                <span>Audio Alerts</span>
+                            </div>
+                            <div class="setting-controls" style="margin-top: 1rem;">
+                                <label class="switch">
+                                    <input type="checkbox" id="enable-email" onchange="updateSettings()">
+                                    <span class="slider round"></span>
+                                </label>
+                                <span>Email Notifications</span>
+                            </div>
+                            <div id="email-input-group" class="setting-controls hidden" style="margin-top: 1rem; width: 100%;">
+                                <input type="email" id="alert-email" placeholder="Enter recipient email..." class="form-input">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

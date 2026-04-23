@@ -8,8 +8,8 @@ from utils.risk import get_flood_risk
 from preprocessing.feature_engineering import extract_hybrid_features
 from models.crocodile_detector import CrocodileDetector, get_default_crocodile_model_path
 from models.depth_estimator import DepthEstimator
+from models.depth_estimator import DepthEstimator
 from models.temporal_tracker import TemporalFloodTracker
-from models.predictive_forecaster import PredictiveForecaster
 
 def apply_morphology(mask):
     """
@@ -71,7 +71,6 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
     croc_detector = model_dict.get('croc_detector')
     depth_estimator = model_dict.get('depth_estimator')
     temporal_tracker = model_dict.get('temporal_tracker')
-    predictive_forecaster = model_dict.get('predictive_forecaster')
     
     img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     orig_h, orig_w = frame.shape[:2]
@@ -198,29 +197,7 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
         flood_direction = progression_stats['direction']
         temporal_risk_level, temporal_risk_score, temporal_insights = temporal_tracker.get_temporal_risk_assessment()
     
-    # 4c. Predictive Forecasting (if available)
-    predictive_risk_level = None
-    predictive_risk_score = 0
-    prediction_hours = 0
-    prediction_factors = []
-    
-    if predictive_forecaster and lat and lon:
-        # Pass current base risk score to forecast
-        prediction = predictive_forecaster.predict_flood_risk(lat, lon, risk_score)
-        predictive_risk_level = prediction['level']
-        predictive_risk_score = int(prediction['probability'] * 100)
-        prediction_hours = prediction['hours_ahead']
-        prediction_factors = prediction['risk_factors']
-    elif predictive_forecaster:
-        # Use demo mode (mock data) even if lat/lon missing for UI preview
-        prediction = predictive_forecaster.predict_flood_risk(22.3, 73.2, risk_score)
-        predictive_risk_level = prediction['level']
-        predictive_risk_score = int(prediction['probability'] * 100)
-        prediction_hours = prediction['hours_ahead']
-        prediction_factors = prediction['risk_factors']
-        prediction_factors.append("DEMO MODE: Using default location")
-    
-    # 4d. Base Risk Calculation
+    # 4c. Base Risk Calculation
     risk_level, risk_score = get_flood_risk(
         water_p=water_p,
         has_person=has_person,
@@ -232,11 +209,11 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
     
     # 4e. Combine all risk factors
     if depth_estimator and depth_risk_score > 0:
-        # Weighted combination: 50% base risk + 20% depth risk + 15% temporal risk + 15% predictive risk
-        risk_score = int(0.5 * risk_score + 0.2 * depth_risk_score + 0.15 * temporal_risk_score + 0.15 * predictive_risk_score)
+        # Weighted combination: 60% base risk + 25% depth risk + 15% temporal risk
+        risk_score = int(0.6 * risk_score + 0.25 * depth_risk_score + 0.15 * temporal_risk_score)
     else:
-        # No depth estimation: 70% base risk + 15% temporal risk + 15% predictive risk
-        risk_score = int(0.7 * risk_score + 0.15 * temporal_risk_score + 0.15 * predictive_risk_score)
+        # No depth estimation: 80% base risk + 20% temporal risk
+        risk_score = int(0.8 * risk_score + 0.2 * temporal_risk_score)
         
         # Recategorize based on combined score
         if risk_score < 15:
@@ -263,11 +240,7 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
         "flood_direction": flood_direction,
         "temporal_risk_level": temporal_risk_level,
         "temporal_risk_score": temporal_risk_score,
-        "temporal_insights": temporal_insights,
-        "predictive_risk_level": predictive_risk_level,
-        "predictive_risk_score": predictive_risk_score,
-        "prediction_hours": prediction_hours,
-        "prediction_factors": prediction_factors
+        "temporal_insights": temporal_insights
     }
     
     # 6. VISUALIZATION
