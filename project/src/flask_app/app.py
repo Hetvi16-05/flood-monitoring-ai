@@ -23,6 +23,7 @@ from config import (
 )
 from models.model_loader import load_models
 from inference.inference_utils import run_hybrid
+from inference.advanced_inference import AdvancedHybridInference, run_advanced_hybrid
 from utils.ip_location import get_location
 from utils.weather_api import get_rainfall
 from utils.logger import log_to_csv
@@ -30,7 +31,7 @@ from utils.logger import log_to_csv
 app = Flask(__name__)
 
 # Global state
-model_bundle = None
+advanced_engine = None
 last_telemetry = {}
 risk_history = []
 conf_history = []
@@ -53,11 +54,12 @@ def sanitize_data(data):
         return int(data)
     return data
 
-def get_models():
-    global model_bundle
-    if model_bundle is None:
-        model_bundle = load_models()
-    return model_bundle
+def get_advanced_engine():
+    global advanced_engine
+    if advanced_engine is None:
+        print("🛠️ Initializing Advanced Custom AI Engine...")
+        advanced_engine = AdvancedHybridInference()
+    return advanced_engine
 
 @app.route('/')
 def index():
@@ -77,17 +79,16 @@ def status():
 def gen_frames(camera_source=0):
     global last_telemetry, risk_history, conf_history
     cap = cv2.VideoCapture(camera_source)
-    model_bundle = get_models()
-    models = model_bundle["models"]
+    engine = get_advanced_engine()
     
     while True:
         success, frame = cap.read()
         if not success:
             break
         else:
-            # Process frame
-            res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_hybrid(
-                frame, models, show_yolo=True, show_mask=True
+            # Process frame using Custom Advanced Architecture
+            res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_advanced_hybrid(
+                frame, engine
             )
             
             # Update global state for /status endpoint
@@ -126,43 +127,48 @@ def video_feed():
 @app.route('/predict', methods=['POST'])
 def predict():
     global last_telemetry, risk_history, conf_history
-    if 'file' not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
-    
-    file = request.files['file']
-    img = Image.open(file.stream)
-    frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-    
-    model_bundle = get_models()
-    models = model_bundle["models"]
-    
-    res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_hybrid(
-        frame, models, show_yolo=True, show_mask=True
-    )
-    
-    # Update state
-    last_telemetry = telemetry
-    last_telemetry['risk_level'] = risk_level
-    last_telemetry['risk_score'] = risk_score
-    last_telemetry['water_p'] = water_p
-    
-    # Log to CSV
-    lat, lon, city = get_location()
-    rain = get_rainfall(lat, lon)
-    log_to_csv(water_p, obj_summary, risk_level, risk_score, rain, city)
-    
-    # Encode result image
-    _, buffer = cv2.imencode('.jpg', res_img)
-    import base64
-    img_base64 = base64.b64encode(buffer).decode('utf-8')
-    
-    return jsonify(sanitize_data({
-        "result_image": img_base64,
-        "telemetry": telemetry,
-        "risk_level": risk_level,
-        "risk_score": risk_score,
-        "water_p": water_p
-    }))
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file uploaded"}), 400
+        
+        file = request.files['file']
+        img = Image.open(file.stream).convert('RGB')
+        frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        
+        engine = get_advanced_engine()
+        
+        res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_advanced_hybrid(
+            frame, engine
+        )
+        
+        # Update state
+        last_telemetry = telemetry
+        last_telemetry['risk_level'] = str(risk_level)
+        last_telemetry['risk_score'] = float(risk_score)
+        last_telemetry['water_p'] = float(water_p)
+        
+        # Log to CSV
+        lat, lon, city = get_location()
+        rain = get_rainfall(lat, lon)
+        log_to_csv(water_p, obj_summary, risk_level, risk_score, rain, city)
+        
+        # Encode result image
+        _, buffer = cv2.imencode('.jpg', res_img)
+        import base64
+        img_base64 = base64.b64encode(buffer).decode('utf-8')
+        
+        return jsonify(sanitize_data({
+            "result_image": img_base64,
+            "telemetry": last_telemetry,
+            "risk_level": str(risk_level),
+            "risk_score": float(risk_score),
+            "water_p": float(water_p)
+        }))
+    except Exception as e:
+        import traceback
+        print(f"❌ Error in /predict: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": f"Image processing failed: {str(e)}"}), 500
 
 @app.route('/upload_video', methods=['POST'])
 def upload_video():

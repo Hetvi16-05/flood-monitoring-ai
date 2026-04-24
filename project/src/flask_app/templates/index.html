@@ -50,7 +50,7 @@
             <header class="top-header">
                 <div class="header-left">
                     <h2>Live Flood Surveillance</h2>
-                    <p class="subtitle">System Status: <span class="status-badge pulse">Real-time Monitoring</span></p>
+                    <p class="subtitle">System Status: <span class="status-badge pulse">RAINWISE V3 CUSTOM ACTIVE</span></p>
                 </div>
                 <div class="header-right">
                     <div class="datetime" id="current-time"></div>
@@ -101,9 +101,24 @@
                         </div>
                         
                         <div class="card telemetry-card">
+                            <h3>Flow Speed</h3>
+                            <div class="value-container">
+                                <span class="tele-value" id="flow-speed">0.00</span>
+                                <small>px/f</small>
+                            </div>
+                        </div>
+
+                        <div class="card telemetry-card">
                             <h3>Expansion Rate</h3>
                             <div class="value-container">
                                 <span class="tele-value" id="expansion-rate">0.0%</span>
+                            </div>
+                        </div>
+
+                        <div class="card telemetry-card">
+                            <h3>Obj Submersion</h3>
+                            <div class="value-container">
+                                <span class="tele-value" id="submersion-score">0.0%</span>
                             </div>
                         </div>
                     </div>

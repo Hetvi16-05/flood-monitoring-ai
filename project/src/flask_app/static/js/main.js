@@ -81,7 +81,9 @@ function updateStatus() {
             document.getElementById('risk-progress').style.width = (tele.risk_score || 0) + '%';
             document.getElementById('water-percent').innerText = (tele.water_p || 0).toFixed(1) + '%';
             document.getElementById('avg-depth').innerText = (tele.avg_water_depth || 0).toFixed(2) + 'm';
+            document.getElementById('flow-speed').innerText = (tele.flow_speed || 0).toFixed(2);
             document.getElementById('expansion-rate').innerText = ((tele.expansion_rate || 0) * 100).toFixed(1) + '%';
+            document.getElementById('submersion-score').innerText = ((tele.submersion || 0) * 100).toFixed(1) + '%';
 
             // Risk Color Coding
             const rl = tele.risk_level;
@@ -171,12 +173,18 @@ function handleImageUpload(file) {
     })
     .then(res => res.json())
     .then(data => {
+        if (data.error) {
+            document.getElementById('result-data').innerHTML = `
+                <div class="error-msg">❌ ${data.error}</div>
+            `;
+            return;
+        }
         document.getElementById('result-img').src = 'data:image/jpeg;base64,' + data.result_image;
         document.getElementById('result-data').innerHTML = `
             <div class="result-telemetry">
-                <p><strong>Risk:</strong> ${data.risk_level} (${data.risk_score}/100)</p>
-                <p><strong>Water Area:</strong> ${data.water_p.toFixed(2)}%</p>
-                <p><strong>Confidence:</strong> ${(data.telemetry.hybrid_conf * 100).toFixed(1)}%</p>
+                <p><strong>Risk:</strong> ${data.risk_level || 'N/A'} (${(data.risk_score || 0).toFixed(1)}/100)</p>
+                <p><strong>Water Area:</strong> ${(data.water_p || 0).toFixed(2)}%</p>
+                <p><strong>Confidence:</strong> ${((data.telemetry?.hybrid_conf || 0) * 100).toFixed(1)}%</p>
             </div>
         `;
     })
