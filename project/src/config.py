@@ -40,7 +40,7 @@ else:
 # IMAGE & TRAINING SETTINGS
 # -----------------------------
 IMG_SIZE = (256, 256)   # Training size
-INF_SIZE = (640, 640)   # Inference size for better quality
+INF_SIZE = (480, 480)   # Reduced inference size for lower CPU/Heat
 BATCH_SIZE = 16
 EPOCHS = 50
 LEARNING_RATE = 1e-4
@@ -53,12 +53,12 @@ CLASSES = ["flood_water", "road", "building", "vegetation", "vehicle", "animal"]
 
 # 0: flood_water, 1: road, 2: building, 3: vegetation, 4: vehicle, 5: animal
 COLORS = [
-    (255, 0, 0),      # Blue (Flood Water)
-    (0, 255, 0),      # Green (Road)
-    (0, 0, 255),      # Red (Building)
-    (0, 128, 255),    # Orange (Vegetation)
-    (255, 255, 0),    # Cyan/Yellow (Vehicle)
-    (255, 0, 255),    # Magenta (Animal)
+    (0, 191, 255),    # Vibrant Blue (Flood Water)
+    (149, 165, 166),   # Gray (Road)
+    (231, 76, 60),     # Red (Building)
+    (39, 174, 96),     # Green (Vegetation)
+    (241, 196, 15),    # Yellow (Vehicle)
+    (155, 89, 182),    # Purple (Animal)
 ]
 
 # -----------------------------

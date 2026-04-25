@@ -72,34 +72,99 @@ class CustomTrainingPipeline:
             
         return total_loss / len(dataloader)
 
-def run_custom_training(model_type):
-    device = torch.device("mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu"))
-    print(f"🔥 Starting Custom Training for {model_type} on {device}")
+def start_training():
+    # 1. Hardware Selection (Apple Silicon GPU)
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
+        print("🚀 Using Apple Silicon GPU (MPS) for training!")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+        print("🚀 Using NVIDIA GPU (CUDA) for training!")
+    else:
+        device = torch.device("cpu")
+        print("⚠️ GPU not found, training on CPU. This will be slow.")
+
+    # 2. Paths
+    ROOT = Path("/Users/HetviSheth/Flood_Prediction")
+    DATASET_ROOT = ROOT / "project" / "dataset_split"
     
-    # Paths
-    ROOT = Path(__file__).resolve().parents[3] # Go up to Flood_Prediction/
-    DATA_DIR = ROOT / "project" / "dataset_custom" / "processed_6c"
-    MASK_DIR = ROOT / "project" / "dataset_custom" / "masks_8c"
+    TRAIN_IMAGES = DATASET_ROOT / "train" / "images"
+    TRAIN_MASKS = DATASET_ROOT / "train" / "masks"
+    VAL_IMAGES = DATASET_ROOT / "val" / "images"
+    VAL_MASKS = DATASET_ROOT / "val" / "masks"
     
-    # Loader
-    dataset = FloodCustomDataset(str(DATA_DIR), str(MASK_DIR))
-    if len(dataset) == 0:
-        print("❌ Dataset is empty. Run pre-processing first!")
-        return
+    # 3. Model & Hyperparameters
+    num_classes = 8
+    batch_size = 16 # Adjust based on RAM
+    epochs = 10
+    learning_rate = 1e-4
+
+    # 4. Loaders
+    train_dataset = FloodCustomDataset(str(TRAIN_IMAGES), str(TRAIN_MASKS), img_size=(256, 256))
+    val_dataset = FloodCustomDataset(str(VAL_IMAGES), str(VAL_MASKS), img_size=(256, 256))
+    
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
+
+    model = FloodNet(num_classes=num_classes).to(device)
+    
+    # 5. Loss & Optimizer
+    criterion = WaterFocalDiceLoss()
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+    # 6. Training Loop with Early Stopping
+    print(f"🔥 Starting Custom Training Loop ({epochs} epochs)...")
+    best_val_loss = float('inf')
+    patience = 3
+    patience_counter = 0
+
+    for epoch in range(epochs):
+        # --- Training Phase ---
+        model.train()
+        train_loss = 0
+        for batch_idx, (data, mask, _) in enumerate(train_loader):
+            data, mask = data.to(device), mask.to(device)
+            
+            optimizer.zero_grad()
+            output = model(data)
+            loss = criterion(output, mask)
+            
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+            
+            if batch_idx % 10 == 0:
+                print(f"Epoch {epoch+1}/{epochs} | Training | Batch {batch_idx}/{len(train_loader)} | Loss: {loss.item():.4f}")
+
+        avg_train_loss = train_loss / len(train_loader)
         
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
-    
-    pipeline = CustomTrainingPipeline(model_type=model_type, device=device)
-    
-    for epoch in range(EPOCHS):
-        loss = pipeline.train_epoch(dataloader)
-        print(f"✅ Epoch {epoch+1}/{EPOCHS} complete. Loss: {loss:.4f}")
+        # --- Validation Phase ---
+        model.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for data, mask, _ in val_loader:
+                data, mask = data.to(device), mask.to(device)
+                output = model(data)
+                loss = criterion(output, mask)
+                val_loss += loss.item()
         
-        # Save Weights
-        save_path = ROOT / "project" / "weights" / f"custom_{model_type}.pth"
-        torch.save(pipeline.model.state_dict(), str(save_path))
+        avg_val_loss = val_loss / len(val_loader)
+        print(f"✅ Epoch {epoch+1} Summary | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
+        
+        # --- Early Stopping & Best Model Save ---
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            patience_counter = 0
+            weights_path = ROOT / "weights" / "flood_net_custom.pth"
+            weights_path.parent.mkdir(exist_ok=True)
+            torch.save(model.state_dict(), str(weights_path))
+            print(f"⭐ New Best Model Saved (Val Loss: {avg_val_loss:.4f})")
+        else:
+            patience_counter += 1
+            print(f"⚠️ No improvement in Val Loss. Patience: {patience_counter}/{patience}")
+            if patience_counter >= patience:
+                print("🛑 Early stopping triggered. Training terminated.")
+                break
 
 if __name__ == "__main__":
-    import sys
-    m_type = sys.argv[1] if len(sys.argv) > 1 else 'flood_net'
-    run_custom_training(m_type)
+    start_training()

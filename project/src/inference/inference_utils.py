@@ -139,7 +139,13 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
             top_px = torch.topk(probs[0, i].flatten(), k=max(1, int(INF_SIZE[0]*INF_SIZE[1]*0.01)))[0]
             seg_class_scores[cls_name] = top_px.mean().item()
             
+        # [ROBUSTNESS FIX] Apply confidence threshold for water (class 0)
+        # Lowered to 0.4 based on user feedback — 0.8 was too strict for murky water
+        water_probs = probs[0, 0]
         pred = torch.argmax(out, dim=1)[0].cpu().numpy().astype(np.uint8)
+        
+        # Override: if it's class 0 but low prob, make it 'road' (class 1) or background
+        pred[(pred == 0) & (water_probs.cpu().numpy() < 0.4)] = 1 
     
     pred = apply_morphology(pred)
     
@@ -178,7 +184,8 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
     depth_risk_level = "LOW"
     depth_risk_score = 0
     
-    if depth_estimator:
+    # [ROBUSTNESS FIX] Suppress depth if water coverage is negligible (< 2%)
+    if depth_estimator and water_p > 2.0:
         flood_mask = (pred == 0).astype(np.uint8)
         avg_water_depth, max_water_depth, depth_map = depth_estimator.get_water_depth(frame, flood_mask)
         depth_risk_level, depth_risk_score = depth_estimator.get_depth_risk_level(avg_water_depth, max_water_depth)

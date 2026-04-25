@@ -31,7 +31,7 @@ from utils.logger import log_to_csv
 app = Flask(__name__)
 
 # Global state
-advanced_engine = None
+models_bundle = None
 last_telemetry = {}
 risk_history = []
 conf_history = []
@@ -54,17 +54,20 @@ def sanitize_data(data):
         return int(data)
     return data
 
-def get_advanced_engine():
-    global advanced_engine
-    if advanced_engine is None:
-        print("🛠️ Initializing Advanced Custom AI Engine...")
-        advanced_engine = AdvancedHybridInference()
-    return advanced_engine
+def get_models():
+    global models_bundle
+    if models_bundle is None:
+        print("🛠️ Initializing RAINWISE Model Bundle...")
+        models_bundle = load_models()
+    return models_bundle
 
 @app.route('/')
 def index():
-    lat, lon, city = get_location()
-    rain = get_rainfall(lat, lon)
+    try:
+        lat, lon, city = get_location()
+        rain = get_rainfall(lat, lon)
+    except:
+        lat, lon, city, rain = 0, 0, "Unknown", 0
     return render_template('index.html', city=city, rain=rain, lat=lat, lon=lon)
 
 @app.route('/status')
@@ -79,40 +82,64 @@ def status():
 def gen_frames(camera_source=0):
     global last_telemetry, risk_history, conf_history
     cap = cv2.VideoCapture(camera_source)
-    engine = get_advanced_engine()
+    bundle = get_models()
+    models = bundle['models']
+    
+    frame_count = 0
+    # Higher frame skip = Cooler Mac
+    FRAME_SKIP = 5 
     
     while True:
         success, frame = cap.read()
         if not success:
             break
+        
+        if frame_count % FRAME_SKIP == 0:
+            # Use same inference as app.py
+            try:
+                res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_hybrid(
+                    frame, models, 
+                    show_yolo=user_settings['show_yolo'], 
+                    show_mask=user_settings['show_mask']
+                )
+                
+                # IMPORTANT: Update global state
+                telemetry['risk_level'] = risk_level
+                telemetry['risk_score'] = risk_score
+                telemetry['water_p'] = water_p
+                
+                last_telemetry = telemetry
+                
+                risk_history.append(risk_score)
+                if len(risk_history) > 50: risk_history.pop(0)
+                
+                conf_history.append(telemetry['hybrid_conf'])
+                if len(conf_history) > 50: conf_history.pop(0)
+
+                # Log to CSV
+                try:
+                    lat, lon, city = get_location()
+                    rain = get_rainfall(lat, lon)
+                    log_to_csv(water_p, obj_summary, risk_level, risk_score, rain, city)
+                except:
+                    pass
+            except Exception as e:
+                print(f"❌ Inference Error: {e}")
+                res_img = frame # Fallback to raw frame
         else:
-            # Process frame using Custom Advanced Architecture
-            res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_advanced_hybrid(
-                frame, engine
-            )
-            
-            # Update global state for /status endpoint
-            last_telemetry = telemetry
-            last_telemetry['risk_level'] = risk_level
-            last_telemetry['risk_score'] = risk_score
-            last_telemetry['water_p'] = water_p
-            
-            risk_history.append(risk_score)
-            if len(risk_history) > 50: risk_history.pop(0)
-            
-            conf_history.append(telemetry['hybrid_conf'])
-            if len(conf_history) > 50: conf_history.pop(0)
+            # Just use the raw frame or previous results
+            res_img = frame
 
-            # Log to CSV
-            lat, lon, city = get_location()
-            rain = get_rainfall(lat, lon)
-            log_to_csv(water_p, obj_summary, risk_level, risk_score, rain, city)
-
-            # Encode and yield
-            ret, buffer = cv2.imencode('.jpg', res_img)
-            frame = buffer.tobytes()
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        frame_count += 1
+        
+        # Encode and yield
+        ret, buffer = cv2.imencode('.jpg', res_img)
+        frame_bytes = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        
+        # Artificial delay to cool down CPU
+        time.sleep(0.01)
 
 @app.route('/video_feed')
 def video_feed():
@@ -135,10 +162,13 @@ def predict():
         img = Image.open(file.stream).convert('RGB')
         frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
         
-        engine = get_advanced_engine()
+        bundle = get_models()
+        models = bundle['models']
         
-        res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_advanced_hybrid(
-            frame, engine
+        res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_hybrid(
+            frame, models,
+            show_yolo=user_settings['show_yolo'],
+            show_mask=user_settings['show_mask']
         )
         
         # Update state
@@ -148,9 +178,12 @@ def predict():
         last_telemetry['water_p'] = float(water_p)
         
         # Log to CSV
-        lat, lon, city = get_location()
-        rain = get_rainfall(lat, lon)
-        log_to_csv(water_p, obj_summary, risk_level, risk_score, rain, city)
+        try:
+            lat, lon, city = get_location()
+            rain = get_rainfall(lat, lon)
+            log_to_csv(water_p, obj_summary, risk_level, risk_score, rain, city)
+        except:
+            pass
         
         # Encode result image
         _, buffer = cv2.imencode('.jpg', res_img)

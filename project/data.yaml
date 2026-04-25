@@ -1,0 +1,12 @@
+# RAINWISE V3 YOLOv8 Dataset Configuration
+path: /Users/HetviSheth/Flood_Prediction/project/dataset_yolo # dataset root dir
+train: images/train
+val: images/val
+
+# Classes
+names:
+  0: water
+  1: road
+  2: building
+  3: vegetation
+  4: vehicle

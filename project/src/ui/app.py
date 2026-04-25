@@ -247,7 +247,7 @@ tab_img, tab_vid, tab_cctv = st.tabs(["📸 Image", "🎥 Video", "📡 CCTV Liv
 
 # --- IMAGE TAB ---
 with tab_img:
-    img_file = st.file_uploader("Upload Image", type=["jpg", "png", "jpeg"], key="img_up")
+    img_file = st.file_uploader("Upload Image", type=["jpg", "png", "jpeg", "webp", "bmp", "tiff"], key="img_up")
     if img_file:
         image = Image.open(img_file).convert("RGB")
         frame = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)

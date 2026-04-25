@@ -5,18 +5,27 @@ __pycache__/
 # models
 *.pt
 *.pth
+weights/
 
 # logs
 *.log
 *.err
+training.pid
 
 # dataset
 project/raw_dataset/
 project/dataset_clean/
 project/dataset_split/
+project/dataset_yolo/
+*.zip
 
 # outputs
 project/outputs/
 project/logs/
 project/test_videos/
 project/weights/
+project/runs/
+runs/
+
+# videos
+*.mp4

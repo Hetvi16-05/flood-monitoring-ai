@@ -26,8 +26,8 @@ def calculate_water_area(mask: np.ndarray) -> float:
     
     total_area = mask.size
     # Phase 3: ignore tiny areas, remove small components
-    # We use 1% of total area as a threshold for "small/tiny"
-    min_area_threshold = 0.01 * total_area  
+    # We use 0.5% of total area as a threshold for "small/tiny"
+    min_area_threshold = 0.005 * total_area  
     
     filtered_water_pixels = 0
     # Label 0 is background, start from 1
