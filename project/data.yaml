@@ -1,7 +1,8 @@
 # RAINWISE V3 YOLOv8 Dataset Configuration
-path: /Users/HetviSheth/Flood_Prediction/project/dataset_yolo # dataset root dir
-train: images/train
-val: images/val
+path: /Users/HetviSheth/Flood_Prediction/project/dataset_split # dataset root dir
+train: train/images
+val: val/images
+test: test/images # Added test split
 
 # Classes
 names:

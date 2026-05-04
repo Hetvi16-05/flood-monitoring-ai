@@ -23,7 +23,8 @@ ASSETS_DIR = DATA_ROOT / "assets"
 # MODELS
 # -----------------------------
 MODEL_PATH = WEIGHTS_DIR / "best_model_v2.pth"
-MODEL_VERSION = "V2-Retrained (5-Channel)"
+TRANSFORMER_MODEL_PATH = WEIGHTS_DIR / "swin_flood_net.pth"
+MODEL_VERSION = "V3-Transformer (SwinV2)"
 YOLO_MODEL_PATH = PROJECT_ROOT / "yolov8n.pt"
 
 # -----------------------------
@@ -40,7 +41,7 @@ else:
 # IMAGE & TRAINING SETTINGS
 # -----------------------------
 IMG_SIZE = (256, 256)   # Training size
-INF_SIZE = (480, 480)   # Reduced inference size for lower CPU/Heat
+INF_SIZE = (256, 256)   # Matches SwinTransformer V3 requirement
 BATCH_SIZE = 16
 EPOCHS = 50
 LEARNING_RATE = 1e-4

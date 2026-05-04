@@ -6,70 +6,76 @@ import sys
 from pathlib import Path
 
 # Add project/src to sys.path
-src_dir = str(Path(__file__).resolve().parents[1])
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
+SRC_DIR = Path(__file__).resolve().parents[1]
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
-from config import CLEAN_DIR, SPLIT_DIR
+from config import PROJECT_ROOT, SPLIT_DIR
 
-def split_dataset(train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
-    """Physically split images and labels from dataset_clean to dataset_split."""
+def split_yolo_dataset(source_dir, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
+    """
+    Consolidates existing YOLO splits and re-splits them into a clean 3-way distribution.
+    """
+    print(f"🔍 Analyzing source: {source_dir}")
     
-    img_src = os.path.join(CLEAN_DIR, "images")
-    label_src = os.path.join(CLEAN_DIR, "labels")
-    mask_src = os.path.join(CLEAN_DIR, "masks")
+    # 1. Collect all images from all subfolders in source
+    all_images = []
+    source_img_root = Path(source_dir) / "images"
+    source_label_root = Path(source_dir) / "labels"
     
-    # Ensure source images exist
-    if not os.path.exists(img_src):
-        print(f"❌ Source image directory not found: {img_src}")
+    for sub in ['train', 'val', 'test']:
+        img_sub = source_img_root / sub
+        if img_sub.exists():
+            all_images.extend([img_sub / f for f in os.listdir(img_sub) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+    
+    if not all_images:
+        print("❌ No images found in source!")
         return
 
-    # Get all images
-    images = [f for f in os.listdir(img_src) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-    random.seed(42)  # For reproducibility
-    random.shuffle(images)
+    random.seed(42)
+    random.shuffle(all_images)
 
-    total = len(images)
+    total = len(all_images)
     train_end = int(total * train_ratio)
     val_end = train_end + int(total * val_ratio)
 
     splits = {
-        "train": images[:train_end],
-        "val": images[train_end:val_end],
-        "test": images[val_end:]
+        "train": all_images[:train_end],
+        "val": all_images[train_end:val_end],
+        "test": all_images[val_end:]
     }
 
-    print(f"📊 Total images: {total}")
-    print(f"📈 Split: Train={len(splits['train'])}, Val={len(splits['val'])}, Test={len(splits['test'])}")
+    print(f"📊 Found {total} total images.")
+    print(f"📈 Re-splitting: Train={len(splits['train'])}, Val={len(splits['val'])}, Test={len(splits['test'])}")
 
     for split_name, split_files in splits.items():
-        img_dst = os.path.join(SPLIT_DIR, split_name, "images")
-        label_dst = os.path.join(SPLIT_DIR, split_name, "labels")
-        # masks are usually for DeepLabV3, YOLO uses labels. We split both.
-        mask_dst = os.path.join(SPLIT_DIR, split_name, "masks")
+        img_dst = Path(SPLIT_DIR) / split_name / "images"
+        label_dst = Path(SPLIT_DIR) / split_name / "labels"
 
-        os.makedirs(img_dst, exist_ok=True)
-        os.makedirs(label_dst, exist_ok=True)
-        os.makedirs(mask_dst, exist_ok=True)
+        img_dst.mkdir(parents=True, exist_ok=True)
+        label_dst.mkdir(parents=True, exist_ok=True)
 
-        for f in tqdm(split_files, desc=f"  Moving to {split_name}"):
+        for img_path in tqdm(split_files, desc=f"📦 Processing {split_name}"):
             # Copy Image
-            shutil.copy2(os.path.join(img_src, f), os.path.join(img_dst, f))
+            shutil.copy2(img_path, img_dst / img_path.name)
             
-            # Copy Label (if exists)
-            base_name = f.rsplit('.', 1)[0]
-            label_f = base_name + ".txt"
-            if os.path.exists(os.path.join(label_src, label_f)):
-                shutil.copy2(os.path.join(label_src, label_f), os.path.join(label_dst, label_f))
-                
-            # Copy Mask (if exists)
-            mask_f = base_name + ".png"
-            if os.path.exists(os.path.join(mask_src, mask_f)):
-                shutil.copy2(os.path.join(mask_src, mask_f), os.path.join(mask_dst, mask_f))
+            # Find and copy corresponding label
+            # Try to find label in any of the source label folders
+            base_name = img_path.stem
+            label_found = False
+            for sub in ['train', 'val', 'test']:
+                label_src = source_label_root / sub / f"{base_name}.txt"
+                if label_src.exists():
+                    shutil.copy2(label_src, label_dst / f"{base_name}.txt")
+                    label_found = True
+                    break
+            
+            if not label_found:
+                # Optionally warn if label is missing
+                pass
 
-    print("\n✅ Dataset Split Complete!")
-    print(f"📂 Results saved in: {SPLIT_DIR}")
+    print(f"\n✅ Data re-split successfully into: {SPLIT_DIR}")
 
 if __name__ == "__main__":
-    # Check if a split already exists and warn (optional)
-    split_dataset()
+    SOURCE = Path("/Users/HetviSheth/Flood_Prediction/project/dataset_yolo")
+    split_yolo_dataset(SOURCE)

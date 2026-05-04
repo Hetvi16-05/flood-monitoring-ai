@@ -118,9 +118,18 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
             raw_detections.append((mock_box, 'crocodile'))
             yolo_class_scores['crocodile'] = max(yolo_class_scores.get('crocodile', 0), croc_det['conf'])
     
-    # 2. 5-CHANNEL SEGMENTATION
+    # 2. MULTI-CHANNEL SEGMENTATION
     img_resized = cv2.resize(img_rgb, INF_SIZE)
-    hybrid_feat = extract_hybrid_features(img_resized).astype(np.float32)
+    
+    # Check model requirements
+    if hasattr(seg, 'backbone') and 'swin' in str(type(seg.backbone)).lower():
+        # SwinFloodNet expects 6 channels (3 RGB + 3 Features)
+        feat_channels = 3
+    else:
+        # DeepLabV3+ expects 5 channels (3 RGB + 2 Features)
+        feat_channels = 2
+        
+    hybrid_feat = extract_hybrid_features(img_resized, channels=feat_channels).astype(np.float32)
     img_norm = img_resized.astype(np.float32) / 255.0
     combined = np.concatenate([img_norm, hybrid_feat], axis=-1).astype(np.float32)
     
@@ -150,7 +159,11 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
     pred = apply_morphology(pred)
     
     # 3. SPATIAL FUSION
-    flood_mask = (pred == 0).astype(np.uint8)
+    # For the legacy model, classes 0, 1, and 2 are all water-related
+    if not hasattr(seg, 'backbone'):
+        flood_mask = ((pred == 0) | (pred == 1) | (pred == 2)).astype(np.uint8)
+    else:
+        flood_mask = (pred == 0).astype(np.uint8)
     valid_boxes, has_person, has_animal, has_vehicle, has_crocodile, obj_summary = spatial_fusion(flood_mask, raw_detections, orig_w, orig_h)
     
     # 3b. ADVANCED HYBRID TELEMETRY
@@ -176,7 +189,8 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
     all_detections = sorted(all_detections, key=lambda x: x["confidence"], reverse=True)
     
     # 4. RISK ENGINE
-    water_p = calculate_water_area(pred)
+    # Recalculate water percentage using the corrected mask
+    water_p = (flood_mask.sum() / flood_mask.size) * 100
     
     # 4a. Water Depth Estimation - DISABLED (shape mismatch bug)
     avg_water_depth = 0.0
