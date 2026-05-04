@@ -178,31 +178,34 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
     # 4. RISK ENGINE
     water_p = calculate_water_area(pred)
     
-    # 4a. Water Depth Estimation
+    # 4a. Water Depth Estimation - DISABLED (shape mismatch bug)
     avg_water_depth = 0.0
     max_water_depth = 0.0
-    depth_risk_level = "LOW"
+    depth_risk_level = None
     depth_risk_score = 0
     
-    # [ROBUSTNESS FIX] Suppress depth if water coverage is negligible (< 2%)
-    if depth_estimator and water_p > 2.0:
-        flood_mask = (pred == 0).astype(np.uint8)
-        avg_water_depth, max_water_depth, depth_map = depth_estimator.get_water_depth(frame, flood_mask)
-        depth_risk_level, depth_risk_score = depth_estimator.get_depth_risk_level(avg_water_depth, max_water_depth)
+    # Temporarily disabled due to shape mismatch issue
+    # TODO: Fix water_mask to depth_values shape alignment
+    # if depth_estimator and water_p > 2.0:
+    #     flood_mask = (pred == 0).astype(np.uint8)
+    #     avg_water_depth, max_water_depth, depth_map = depth_estimator.get_water_depth(frame, flood_mask)
+    #     depth_risk_level, depth_risk_score = depth_estimator.get_depth_risk_level(avg_water_depth, max_water_depth)
     
-    # 4b. Temporal Flood Tracking
-    temporal_risk_level = "LOW"
+    # 4b. Temporal Flood Tracking - DISABLED (optical flow size mismatch)
+    temporal_risk_level = None
     temporal_risk_score = 0
     temporal_insights = []
     expansion_rate = 0.0
     flood_direction = "unknown"
     
-    if temporal_tracker:
-        flood_mask = (pred == 0).astype(np.uint8)
-        flow_data, progression_stats = temporal_tracker.update(frame, flood_mask)
-        expansion_rate = progression_stats['expansion_rate']
-        flood_direction = progression_stats['direction']
-        temporal_risk_level, temporal_risk_score, temporal_insights = temporal_tracker.get_temporal_risk_assessment()
+    # Temporarily disabled due to optical flow size mismatch
+    # TODO: Fix frame size alignment for optical flow
+    # if temporal_tracker:
+    #     flood_mask = (pred == 0).astype(np.uint8)
+    #     flow_data, progression_stats = temporal_tracker.update(frame, flood_mask)
+    #     expansion_rate = progression_stats['expansion_rate']
+    #     flood_direction = progression_stats['direction']
+    #     temporal_risk_level, temporal_risk_score, temporal_insights = temporal_tracker.get_temporal_risk_assessment()
     
     # 4c. Base Risk Calculation
     risk_level, risk_score = get_flood_risk(
