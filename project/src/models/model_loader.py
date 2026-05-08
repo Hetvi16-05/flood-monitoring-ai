@@ -23,7 +23,7 @@ def load_models():
     Production-level model loader.
     """
     # 1. Dual YOLO Initialization
-    yolo_coco = YOLO(PROJECT_ROOT / "yolov8n.pt")
+    yolo_coco = YOLO(PROJECT_ROOT / "yolo12n.pt")
     custom_yolo_path = PROJECT_ROOT / "project" / "weights" / "custom_yolo.pt"
     yolo_custom = YOLO(custom_yolo_path) if os.path.exists(custom_yolo_path) else yolo_coco
 
@@ -67,8 +67,13 @@ def load_models():
     gcam = None
     try:
         if hasattr(seg, 'backbone'):
-            # Target the last feature map of the backbone
-            target_layer = seg.backbone.feature_info[-1]['module']
+            # For PVTv2 backbones in timm
+            if hasattr(seg.backbone, 'stages'):
+                target_layer = seg.backbone.stages[-1]
+            else:
+                # Fallback to feature_info if stages not directly accessible
+                target_layer = dict(seg.backbone.named_modules())[seg.backbone.feature_info[-1]['module']]
+            
             gcam = FloodGradCAM(seg, target_layer)
             print(f"👁️ XAI Engine: Grad-CAM active for {seg_type}")
     except Exception as e:

@@ -136,9 +136,13 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, explain_ai=Fal
     tensor = torch.from_numpy(combined).float().permute(2, 0, 1).unsqueeze(0).to(DEVICE)
     with torch.no_grad():
         out = seg(tensor)
+        
+        # [CRITICAL FIX] SegFormer outputs are 1/4 the input size. Upscale back to 256x256.
+        out = torch.nn.functional.interpolate(out, size=INF_SIZE, mode='bilinear', align_corners=False)
+        
         probs = torch.softmax(out, dim=1) # (1, C, H, W)
         
-        # Calculate segmentation confidence (average max probability across all pixels)
+        # Calculate segmentation confidence
         seg_conf = torch.max(probs, dim=1)[0].mean().item()
         
         # Get per-class presence confidence (only for classes the model actually has)
@@ -150,30 +154,47 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, explain_ai=Fal
             top_px = torch.topk(probs[0, i].flatten(), k=max(1, int(INF_SIZE[0]*INF_SIZE[1]*0.01)))[0]
             seg_class_scores[cls_name] = top_px.mean().item()
             
-        # [SENSITIVITY BOOST] Lowered to 0.15 for muddy monsoon water
-        water_probs = probs[0, 0]
-        pred = torch.argmax(out, dim=1)[0].cpu().numpy().astype(np.uint8)
+        # [SPECTRAL AMPLIFICATION] Weighted fusion of Model + Physics
+        water_probs = probs[0, 1].cpu().numpy()
         
-        # Override: if it's class 0 but low prob, make it 'road' (class 1) or background
-        pred[(pred == 0) & (water_probs.cpu().numpy() < 0.15)] = 1 
+        # Physics-based injection
+        img_rgb = img_resized.astype(np.float32) / 255.0
+        r, g, b = img_rgb[:,:,0], img_rgb[:,:,1], img_rgb[:,:,2]
+        ndwi_map = hybrid_feat[:, :, 0] # Water Index
+        texture_map = hybrid_feat[:, :, 1] # Roughness (Sobel)
+        
+        # [GREY PENALTY] Asphalt is perfectly grey (R=G=B). Water is not.
+        is_grey = (np.abs(r - g) < 0.04) & (np.abs(g - b) < 0.04) & (np.abs(r - b) < 0.04)
+        
+        # Final Fusion: Physics + Texture Suppression + Grey Penalty
+        water_probs = (water_probs * 0.4) + (ndwi_map * 0.6)
+        water_probs = water_probs * (1.0 - texture_map * 0.7) # Suppress rough areas
+        water_probs[is_grey] *= 0.3 # Strongly penalize grey asphalt pixels
+        
+        # Create a professional prediction mask
+        pred = np.zeros((INF_SIZE[1], INF_SIZE[0]), dtype=np.uint8)
+        pred[water_probs > 0.3] = 1 # High-fidelity balance
         
     # 2b. Explainable AI (Grad-CAM)
     xai_heatmap = None
     if explain_ai and model_dict.get('gcam'):
         try:
-            # Generate heatmap for class 0 (Flood Water)
-            xai_heatmap = model_dict['gcam'].generate_heatmap(tensor, class_idx=0)
+            # Generate heatmap for class 1 (Flood Water)
+            xai_heatmap = model_dict['gcam'].generate_heatmap(tensor, class_idx=1)
         except Exception as e:
-            print(f"⚠️ Grad-CAM failed: {e}")
+            # Fallback to a simpler layer if the stage-based targeting fails
+            print(f"⚠️ Grad-CAM targeting fallback...")
+            try:
+                target_layer = list(seg.backbone.children())[-1]
+                xai_heatmap = FloodGradCAM(seg, target_layer).generate_heatmap(tensor, class_idx=1)
+            except:
+                print(f"⚠️ Grad-CAM failed: {e}")
     
     pred = apply_morphology(pred)
     
     # 3. SPATIAL FUSION
-    # For the legacy model, classes 0, 1, and 2 are all water-related
-    if not hasattr(seg, 'backbone'):
-        flood_mask = ((pred == 0) | (pred == 1) | (pred == 2)).astype(np.uint8)
-    else:
-        flood_mask = (pred == 0).astype(np.uint8)
+    # For SegFormer, Class 1 is now our flood mask
+    flood_mask = (pred == 1).astype(np.uint8)
     valid_boxes, has_person, has_animal, has_vehicle, has_crocodile, obj_summary = spatial_fusion(flood_mask, raw_detections, orig_w, orig_h)
     
     # 3b. ADVANCED HYBRID TELEMETRY
@@ -278,17 +299,24 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, explain_ai=Fal
     }
     
     # 6. VISUALIZATION
-    display_img = img_rgb.copy()
+    # [CRITICAL TYPE FIX] Convert back to uint8 for OpenCV overlays
+    display_img = (img_rgb * 255).astype(np.uint8)
+    
     if show_mask:
         mask_c = np.zeros((INF_SIZE[1], INF_SIZE[0], 3), dtype=np.uint8)
         for i, color in enumerate(COLORS):
             mask_c[pred == i] = color
-        mask_c = cv2.resize(mask_c, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST)
+        
+        # [ROBUSTNESS FIX] Ensure mask exactly matches display_img dimensions
+        mask_c = cv2.resize(mask_c, (display_img.shape[1], display_img.shape[0]), interpolation=cv2.INTER_NEAREST)
         display_img = cv2.addWeighted(display_img, 0.7, mask_c, 0.3, 0)
     
     if explain_ai and xai_heatmap is not None:
-        # Scale heatmap to original size and overlay
-        display_img = overlay_heatmap(display_img, xai_heatmap, alpha=0.4)
+        # [TYPE FIX] Ensure heatmap is uint8 to match display_img
+        xai_heatmap = cv2.resize(xai_heatmap, (display_img.shape[1], display_img.shape[0]))
+        if xai_heatmap.dtype != np.uint8:
+            xai_heatmap = (xai_heatmap * 255).astype(np.uint8)
+        display_img = cv2.addWeighted(display_img, 0.6, xai_heatmap, 0.4, 0)
     
     # All text overlays removed - clean visualization
 
