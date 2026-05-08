@@ -32,12 +32,15 @@ def load_models():
     print(f"📡 Model Selector: Requesting {model_type}...")
     
     from models.segformer_model import SegFormerFlood
-    SEGFORMER_WEIGHTS = PROJECT_ROOT / "project" / "weights" / "segformer_flood_v3_1.pth"
+    # Prioritize the Expert weights, then Demo weights
+    EXPERT_WEIGHTS = PROJECT_ROOT / "project" / "weights" / "rainwise_v3_1_expert.pth"
+    DEMO_WEIGHTS = PROJECT_ROOT / "project" / "weights" / "rainwise_v3_1_demo.pth"
+    SEGFORMER_WEIGHTS = EXPERT_WEIGHTS if EXPERT_WEIGHTS.exists() else DEMO_WEIGHTS
 
     if model_type == "segformer":
-        seg = SegFormerFlood(num_classes=NUM_CLASSES, in_channels=6)
+        seg = SegFormerFlood(num_classes=2, in_channels=6) # Forced to 2 classes for V3.1
         current_model_path = SEGFORMER_WEIGHTS
-        seg_type = "SegFormer-B0 (V3.1)"
+        seg_type = "SegFormer-B0 (V3.1 Elite)"
     elif model_type == "swin_transformer" and os.path.exists(TRANSFORMER_MODEL_PATH):
         seg = SwinFloodNet(num_classes=NUM_CLASSES, in_channels=6)
         current_model_path = TRANSFORMER_MODEL_PATH

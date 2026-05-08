@@ -121,13 +121,12 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, explain_ai=Fal
     # 2. MULTI-CHANNEL SEGMENTATION
     img_resized = cv2.resize(img_rgb, INF_SIZE)
     
-    # [ROBUST FIX] Detect required channels by inspecting the model's first layer
-    try:
-        first_layer = next(seg.parameters())
-        expected_channels = first_layer.shape[1]
-        feat_channels = 3 if expected_channels == 6 else 2
-    except:
-        # Fallback to legacy
+    # [ROBUST FIX] Ensure SegFormer gets its 3 extra channels (NDWI, Texture, Elevation)
+    seg_type_str = str(type(seg))
+    if "SegFormer" in seg_type_str or "Swin" in seg_type_str:
+        feat_channels = 3
+    else:
+        # Fallback for legacy models
         feat_channels = 2
         
     hybrid_feat = extract_hybrid_features(img_resized, channels=feat_channels).astype(np.float32)
@@ -142,10 +141,12 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, explain_ai=Fal
         # Calculate segmentation confidence (average max probability across all pixels)
         seg_conf = torch.max(probs, dim=1)[0].mean().item()
         
-        # Get per-class presence confidence (max prob in any pixel for that class)
+        # Get per-class presence confidence (only for classes the model actually has)
         seg_class_scores = {}
-        for i, cls_name in enumerate(CLASSES):
-            # Use mean of top 10% pixels for a stable presence score
+        num_output_classes = probs.shape[1]
+        for i in range(num_output_classes):
+            cls_name = CLASSES[i] if i < len(CLASSES) else f"Class_{i}"
+            # Use mean of top 1% pixels for a stable presence score
             top_px = torch.topk(probs[0, i].flatten(), k=max(1, int(INF_SIZE[0]*INF_SIZE[1]*0.01)))[0]
             seg_class_scores[cls_name] = top_px.mean().item()
             

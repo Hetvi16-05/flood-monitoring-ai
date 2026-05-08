@@ -1,131 +1,128 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 import numpy as np
 from pathlib import Path
 import os
 import sys
 import cv2
+import random
+import torch.nn.functional as F
 
-# Add project src to path
+# Professional path management
 sys.path.append(str(Path(__file__).parent.parent))
 
-from models.segmentation_v2 import create_deeplabv3plus as FloodNet
-from models.flood_transformer import SwinFloodNet
 from models.segformer_model import SegFormerFlood
 from models.custom_dataset import FloodCustomDataset
-from training.losses import DiceFocalLoss
 
-def calculate_metrics(pred, target, threshold=0.3):
-    pred = torch.sigmoid(pred)
-    pred = (pred > threshold).float()
-    p = pred[:, 1].cpu().numpy().flatten()
-    t = (target == 1).cpu().numpy().flatten()
-    intersection = np.logical_and(p, t).sum()
-    union = np.logical_or(p, t).sum()
-    iou = intersection / (union + 1e-6)
-    dice = (2. * intersection) / (p.sum() + t.sum() + 1e-6)
-    precision = intersection / (p.sum() + 1e-6)
-    recall = intersection / (t.sum() + 1e-6)
-    return iou, dice, precision, recall
+class DiceFocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2.0, smooth=1.0):
+        super(DiceFocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.smooth = smooth
 
-def save_visual_check(epoch, data, mask, output, save_dir, threshold=0.3):
-    save_dir = Path(save_dir); save_dir.mkdir(parents=True, exist_ok=True)
-    img = (data[0, :3].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    gt = cv2.cvtColor((mask[0].cpu().numpy() * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR)
-    pred = (torch.sigmoid(output[0, 1]).cpu().numpy() > threshold).astype(np.uint8) * 255
-    pred = cv2.cvtColor(pred, cv2.COLOR_GRAY2BGR)
-    gt[mask[0].cpu().numpy() == 1] = [0, 255, 0]
-    pred[pred[:,:,0] == 255] = [0, 0, 255]
-    cv2.imwrite(str(save_dir / f"epoch_{epoch+1}_v3_1.png"), np.hstack([img, gt, pred]))
+    def forward(self, pred, target):
+        pred_softmax = torch.softmax(pred, dim=1)
+        pred_fg = pred_softmax[:, 1]
+        target_fg = (target == 1).float()
+        
+        bce = F.binary_cross_entropy(pred_fg, target_fg, reduction='none')
+        p_t = pred_fg * target_fg + (1 - pred_fg) * (1 - target_fg)
+        focal_loss = self.alpha * (1 - p_t)**self.gamma * bce
+        
+        intersection = (pred_fg * target_fg).sum()
+        dice_loss = 1 - (2. * intersection + self.smooth) / (pred_fg.sum() + target_fg.sum() + self.smooth)
+        
+        return focal_loss.mean() + dice_loss
 
-def start_training():
-    device = torch.device("mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu"))
+def start_elite_training():
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+    print(f"⚡ ELITE SPRINT: Targeting Speed + Precision on {device}")
+    
     PROJECT_ROOT = Path(__file__).parent.parent.parent
     DATASET_ROOT = PROJECT_ROOT / "dataset_split"
     WEIGHTS_DIR = PROJECT_ROOT / "weights"; WEIGHTS_DIR.mkdir(exist_ok=True)
-    VISUAL_DIR = PROJECT_ROOT / "visual_val_v3_1"
     
-    NUM_CLASSES = 2
-    BATCH_SIZE = int(os.getenv("BATCH_SIZE", 8))
-    LEARNING_RATE = 1e-4
-    EPOCHS = int(os.getenv("EPOCHS", 40))
-    USE_AMP = os.getenv("USE_AMP", "0") == "1"
+    # 1. ELITE HYPERPARAMETERS
+    BATCH_SIZE = 16 
+    EPOCHS = 30
+    LR_MAX = 8e-4
+    IMAGES_PER_EPOCH = 2000 
     
-    train_dataset = FloodCustomDataset(str(DATASET_ROOT / "train" / "images"), 
-                                       masks_dir=str(DATASET_ROOT / "train" / "masks_hq"), balance=True)
+    # 2. DATA LOADERS
+    full_train_dataset = FloodCustomDataset(str(DATASET_ROOT / "train" / "images"), 
+                                            masks_dir=str(DATASET_ROOT / "train" / "masks_hq"), 
+                                            balance=True, augment=True)
     val_dataset = FloodCustomDataset(str(DATASET_ROOT / "val" / "images"), 
-                                     masks_dir=str(DATASET_ROOT / "val" / "masks_hq"), balance=False)
-    
-    # Optimization for Mac: persistent_workers=True
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=2, persistent_workers=True)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2, persistent_workers=True)
+                                     masks_dir=str(DATASET_ROOT / "val" / "masks_hq"), 
+                                     balance=False, augment=False)
 
-    model_type = os.getenv("MODEL_TYPE", "segformer")
-    if model_type == "segformer":
-        model = SegFormerFlood(num_classes=NUM_CLASSES, in_channels=6).to(device)
-        weights_name = "segformer_flood_v3_1.pth"
-    elif model_type == "swin_transformer":
-        model = SwinFloodNet(num_classes=NUM_CLASSES, in_channels=6).to(device)
-        weights_name = "swin_flood_net_v3_1.pth"
-    else:
-        model = FloodNet(num_classes=NUM_CLASSES).to(device)
-        weights_name = "flood_net_v3_1.pth"
+    # 3. HIGH-CAPACITY MODEL (SegFormer-B0)
+    model = SegFormerFlood(num_classes=2, in_channels=6).to(device)
     
-    optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=0.01)
-    # Scheduler: Break plateaus
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3)
+    # [RESUME MECHANISM]
+    RESUME_PATH = WEIGHTS_DIR / "rainwise_v3_1_expert.pth"
+    best_iou = 0.0
+    if RESUME_PATH.exists():
+        print(f"♻️ RESUMING: Loading existing weights from {RESUME_PATH.name}")
+        try:
+            model.load_state_dict(torch.load(RESUME_PATH, map_location=device))
+            print("✅ Weights Loaded Successfully.")
+        except Exception as e:
+            print(f"⚠️ Could not resume: {e}.")
+    
+    optimizer = optim.AdamW(model.parameters(), lr=LR_MAX/10, weight_decay=0.01)
+    
+    steps_per_epoch = IMAGES_PER_EPOCH // BATCH_SIZE
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        optimizer, max_lr=LR_MAX, steps_per_epoch=steps_per_epoch, epochs=EPOCHS
+    )
+    
     criterion = DiceFocalLoss()
     
-    # Gradient Scaler for AMP
-    scaler = torch.cuda.amp.GradScaler(enabled=USE_AMP)
-    
-    best_iou = 0.0
     for epoch in range(EPOCHS):
-        model.train(); train_loss = 0
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{EPOCHS}")
+        indices = random.sample(range(len(full_train_dataset)), IMAGES_PER_EPOCH)
+        train_subset = Subset(full_train_dataset, indices)
+        train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True)
+        
+        model.train()
+        pbar = tqdm(train_loader, desc=f"Elite Epoch {epoch+1}/{EPOCHS}")
         for data, mask, _ in pbar:
             data, mask = data.to(device), mask.to(device)
             optimizer.zero_grad()
-            
-            with torch.cuda.amp.autocast(enabled=USE_AMP):
-                output = model(data)
-                loss = criterion(output, mask)
-            
-            if USE_AMP:
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                loss.backward()
-                optimizer.step()
-                
-            train_loss += loss.item()
+            output = model(data)
+            loss = criterion(output, mask)
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
             pbar.set_postfix({"loss": f"{loss.item():.4f}"})
 
-        model.eval(); v_metrics = {"loss": 0, "iou": 0, "dice": 0, "prec": 0, "rec": 0}
+        # Fast Validation
+        model.eval(); total_iou = 0
+        val_subset_indices = random.sample(range(len(val_dataset)), min(500, len(val_dataset)))
+        val_subset = Subset(val_dataset, val_subset_indices)
+        val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, shuffle=False)
+        
         with torch.no_grad():
-            for i, (data, mask, _) in enumerate(val_loader):
+            for data, mask, _ in val_loader:
                 data, mask = data.to(device), mask.to(device)
-                output = model(data); v_metrics["loss"] += criterion(output, mask).item()
-                iou, dice, prec, rec = calculate_metrics(output, mask)
-                v_metrics["iou"] += iou; v_metrics["dice"] += dice; v_metrics["prec"] += prec; v_metrics["rec"] += rec
-                if i == 0: save_visual_check(epoch, data, mask, output, VISUAL_DIR)
+                output = model(data)
+                pred = torch.softmax(output, dim=1)[:, 1] > 0.5
+                t = (mask == 1)
+                inter = (pred & t).sum().item()
+                union = (pred | t).sum().item()
+                total_iou += inter / (union + 1e-6)
         
-        num_v = len(val_loader); avg_iou = v_metrics['iou']/num_v
-        print(f"📊 Epoch {epoch+1} Summary: IoU: {avg_iou:.4f} | Prec: {v_metrics['prec']/num_v:.4f} | Rec: {v_metrics['rec']/num_v:.4f}")
+        avg_iou = total_iou / len(val_loader)
+        print(f"📊 Accuracy: {avg_iou:.4f}")
         
-        # Scheduler update on IoU
-        scheduler.step(avg_iou)
-        
-        # SAVE BEST ON IOU
         if avg_iou > best_iou:
             best_iou = avg_iou
-            torch.save(model.state_dict(), str(WEIGHTS_DIR / weights_name))
-            print(f"⭐ New Best Model (IoU: {avg_iou:.4f})")
+            torch.save(model.state_dict(), str(WEIGHTS_DIR / "rainwise_v3_1_expert.pth"))
+            print(f"⭐ [ELITE SAVED] IoU: {avg_iou:.4f}")
 
 if __name__ == "__main__":
-    start_training()
+    start_elite_training()

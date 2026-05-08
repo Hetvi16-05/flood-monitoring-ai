@@ -2,46 +2,37 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class DiceFocalLoss(nn.Module):
-    """
-    V3.1 Specialized Loss: 50% Dice + 50% Focal.
-    Perfect for hard environmental samples (reflections, muddy water).
-    """
-    def __init__(self, alpha=0.25, gamma=2.0, smooth=1.0):
-        super(DiceFocalLoss, self).__init__()
-        self.alpha = alpha
-        self.gamma = gamma
-        self.smooth = smooth
 
-    def dice_loss(self, inputs, targets, smooth=1):
-        inputs = torch.sigmoid(inputs)
-        inputs = inputs.reshape(-1)
-        targets = targets.reshape(-1)
-        intersection = (inputs * targets).sum()
-        return 1 - (2. * intersection + smooth) / (inputs.sum() + targets.sum() + smooth)
+class HybridFloodLoss(nn.Module):
+    """
+    V3.1 High-Performance Loss: 70% Dice + 30% Cross-Entropy.
+    Optimized for stable training on vision transformers.
+    """
+    def __init__(self, smooth=1.0):
+        super(HybridFloodLoss, self).__init__()
+        self.smooth = smooth
+        self.ce = nn.CrossEntropyLoss()
+
+    def dice_loss(self, pred, target):  
+        # Apply softmax to get probabilities for each class
+        pred = torch.softmax(pred, dim=1)
+        pred_fg = pred[:, 1] # Foreground class (flood)
+
+        # Ensure target is float for intersection
+        target_fg = (target == 1).float()
+
+        pred_fg = pred_fg.reshape(-1)
+        target_fg = target_fg.reshape(-1)
+
+        intersection = (pred_fg * target_fg).sum()
+        dice = (2.0 * intersection + self.smooth) / (pred_fg.sum() + target_fg.sum() + self.smooth)
+
+        return 1 - dice
 
     def forward(self, pred, target):
-        num_classes = pred.shape[1]
-        total_loss = 0
+        dice = self.dice_loss(pred, target)
+        ce = self.ce(pred, target)
         
-        # Ensure pred is in float32 for loss stability if using AMP
-        pred = pred.float()
-        
-        # We iterate through foreground classes
-        for i in range(num_classes):
-            logits = pred[:, i]
-            p = torch.sigmoid(logits)
-            t = (target == i).float()
-            
-            # 1. Focal Loss Component - Using with_logits for stability
-            bce = F.binary_cross_entropy_with_logits(logits, t, reduction='none')
-            p_t = p * t + (1 - p) * (1 - t)
-            f_loss = self.alpha * (1 - p_t)**self.gamma * bce
-            f_loss = f_loss.mean()
-            
-            # 2. Dice Loss Component
-            d_loss = self.dice_loss(logits, t, self.smooth)
-            
-            total_loss += (0.5 * f_loss + 0.5 * d_loss)
-            
-        return total_loss
+        # Weighted combination for high-precision boundaries
+        total = 0.7 * dice + 0.3 * ce
+        return total

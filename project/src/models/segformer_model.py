@@ -18,7 +18,7 @@ class SegFormerFlood(nn.Module):
     def __init__(self, num_classes=2, in_channels=6, embed_dim=256):
         super().__init__()
         
-        # 1. PVTv2-B0 Backbone (Lite Version for MacBook Air)
+        # 1. PVTv2-B0 Backbone (Lite/Fast Version)
         self.backbone = timm.create_model(
             'pvt_v2_b0', 
             pretrained=True, 
