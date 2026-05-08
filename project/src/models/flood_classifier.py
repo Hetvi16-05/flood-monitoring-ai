@@ -30,6 +30,7 @@ class FloodClassifierSigLIP:
         
         # 2. Preprocess
         inputs = self.processor(images=pil_img, return_tensors="pt").to(self.device)
+        inputs = {k: v.float() if torch.is_tensor(v) else v for k, v in inputs.items()}
         
         # 3. Inference
         with torch.no_grad():

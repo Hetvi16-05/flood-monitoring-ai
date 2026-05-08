@@ -106,9 +106,21 @@ function updateStatus() {
             document.getElementById('risk-score').innerText = tele.risk_score || '0';
             document.getElementById('risk-progress').style.width = (tele.risk_score || 0) + '%';
             document.getElementById('water-percent').innerText = (tele.water_p || 0).toFixed(1) + '%';
-            document.getElementById('avg-depth').innerText = (tele.avg_water_depth || 0).toFixed(2) + 'm';
             document.getElementById('expansion-rate').innerText = ((tele.expansion_rate || 0) * 100).toFixed(1) + '%';
             document.getElementById('submersion-score').innerText = ((tele.submersion || 0) * 100).toFixed(1) + '%';
+            
+            // Buzzer Logic
+            const buzzer = document.getElementById('buzzer');
+            const rl = tele.risk_level || 'LOW';
+            const soundEnabled = document.getElementById('enable-sound').checked;
+            const isDangerous = rl.includes('HIGH') || rl.includes('EXTREME') || rl === 'DANGEROUS';
+
+            if (isDangerous && soundEnabled) {
+                if (buzzer.paused) buzzer.play().catch(e => console.log("Audio play blocked: ", e));
+            } else {
+                buzzer.pause();
+                buzzer.currentTime = 0;
+            }
             
             // LSTM Prediction Update
             const lstmEl = document.getElementById('lstm-prediction');
@@ -352,4 +364,39 @@ function updateSettings() {
     .then(res => res.json())
     .then(data => console.log('Settings synced:', data))
     .catch(err => console.error('Settings sync failed:', err));
+}
+function analyzeImageUrl() {
+    const url = document.getElementById('img-url').value;
+    const resultSection = document.getElementById('upload-results');
+    const resultData = document.getElementById('result-data');
+    
+    if (!url) return;
+    
+    resultSection.classList.remove('hidden');
+    resultData.innerText = '🌐 Fetching & Analyzing Online Image...';
+    
+    fetch('/analyze_url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            resultData.innerHTML = `<div class="error-msg">❌ ${data.error}</div>`;
+            return;
+        }
+        document.getElementById('result-img').src = 'data:image/jpeg;base64,' + data.result_image;
+        document.getElementById('result-data').innerHTML = `
+            <div class="result-telemetry">
+                <p><strong>Risk:</strong> ${data.risk_level || 'N/A'} (${(data.risk_score || 0).toFixed(1)}/100)</p>
+                <p><strong>Water Area:</strong> ${(data.water_p || 0).toFixed(2)}%</p>
+                <p><strong>Confidence:</strong> ${((data.telemetry?.hybrid_conf || 0) * 100).toFixed(1)}%</p>
+                ${data.telemetry?.croc_detected ? `<p style="color: #ef4444; font-weight: 700;">🐊 PREDATOR DETECTED: ${data.telemetry.croc_count}</p>` : ''}
+            </div>
+        `;
+    })
+    .catch(err => {
+        resultData.innerText = '❌ Error: ' + err;
+    });
 }

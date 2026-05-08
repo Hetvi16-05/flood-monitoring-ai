@@ -93,12 +93,6 @@
                             </div>
                         </div>
 
-                        <div class="card telemetry-card">
-                            <h3>Water Depth (Avg)</h3>
-                            <div class="value-container">
-                                <span class="tele-value" id="avg-depth">0.00m</span>
-                            </div>
-                        </div>
                         
                         <div class="card telemetry-card lstm-card">
                             <h3>LSTM Predictive Insight</h3>
@@ -165,6 +159,15 @@
                             <input type="file" id="video-input" hidden accept="video/*" onchange="handleVideoUpload(this.files[0])">
                         </div>
                     </div>
+                    
+                    <div class="url-analysis-group" style="margin-top: 1.5rem;">
+                        <p class="subtitle">🌐 Analyze via URL (Instant)</p>
+                        <div class="cloud-input-group">
+                            <input type="text" id="img-url" placeholder="Paste Flood/Croc Image URL..." class="form-input">
+                            <button class="btn btn-secondary" onclick="analyzeImageUrl()">Analyze URL</button>
+                        </div>
+                    </div>
+
                     <div id="upload-results" class="upload-results hidden">
                         <img id="result-img" class="result-img">
                         <div id="result-data"></div>
@@ -242,6 +245,7 @@
         </main>
     </div>
 
+    <audio id="buzzer" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" loop></audio>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

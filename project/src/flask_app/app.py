@@ -69,7 +69,38 @@ def index():
         rain = get_rainfall(lat, lon)
     except:
         lat, lon, city, rain = 0, 0, "Unknown", 0
-    return render_template('index.html', city=city, rain=rain, lat=lat, lon=lon)
+    
+    source = request.args.get('source', '0')
+    return render_template('index.html', city=city, rain=rain, lat=lat, lon=lon, current_source=source)
+
+@app.route('/video_feed')
+def video_feed():
+    source = request.args.get('source', '0')
+    # Convert to int if it's a webcam index
+    if source.isdigit():
+        source = int(source)
+    return Response(gen_frames(camera_source=source), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/test_image', methods=['POST'])
+def test_image():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    
+    file = request.files['file']
+    img_bytes = file.read()
+    nparr = np.frombuffer(img_bytes, np.uint8)
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+    bundle = get_models()
+    res_img, water_p, _, risk_level, risk_score, telemetry = run_advanced_hybrid(frame, bundle['engine'])
+    
+    # Return results for display
+    return jsonify({
+        "risk_level": risk_level,
+        "risk_score": risk_score,
+        "water_p": water_p,
+        "telemetry": telemetry
+    })
 
 @app.route('/status')
 def status():
@@ -139,14 +170,10 @@ def gen_frames(camera_source=0):
                 if len(conf_history) > 50: conf_history.pop(0)
 
                 # Log to CSV
-                try:
-                    lat, lon, city = get_location()
-                    rain = get_rainfall(lat, lon)
-                    log_to_csv(water_p, obj_summary, risk_level, risk_score, rain, city)
-                except:
-                    pass
             except Exception as e:
                 print(f"❌ Inference Error: {e}")
+                import traceback
+                traceback.print_exc()
                 res_img = frame # Fallback to raw frame
         else:
             # Just use the raw frame or previous results
@@ -163,15 +190,7 @@ def gen_frames(camera_source=0):
         # Artificial delay to cool down CPU
         time.sleep(0.01)
 
-@app.route('/video_feed')
-def video_feed():
-    source = request.args.get('source', 0)
-    try:
-        source = int(source)
-    except:
-        pass
-    return Response(gen_frames(source),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+@app.route('/update_settings', methods=['POST'])
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -241,6 +260,37 @@ def predict():
         print(f"❌ Error in /predict: {str(e)}")
         traceback.print_exc()
         return jsonify({"error": f"Image processing failed: {str(e)}"}), 500
+
+@app.route('/analyze_url', methods=['POST'])
+def analyze_url():
+    data = request.json
+    url = data.get('url')
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    
+    try:
+        import requests
+        from io import BytesIO
+        response = requests.get(url, timeout=10)
+        img = Image.open(BytesIO(response.content)).convert('RGB')
+        frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        
+        bundle = get_models()
+        res_img, water_p, _, risk_level, risk_score, telemetry = run_advanced_hybrid(frame, bundle['engine'])
+        
+        _, buffer = cv2.imencode('.jpg', res_img)
+        import base64
+        img_base64 = base64.b64encode(buffer).decode('utf-8')
+        
+        return jsonify(sanitize_data({
+            "result_image": img_base64,
+            "telemetry": telemetry,
+            "risk_level": str(risk_level),
+            "risk_score": float(risk_score),
+            "water_p": float(water_p)
+        }))
+    except Exception as e:
+        return jsonify({"error": f"URL analysis failed: {str(e)}"}), 500
 
 @app.route('/upload_video', methods=['POST'])
 def upload_video():
