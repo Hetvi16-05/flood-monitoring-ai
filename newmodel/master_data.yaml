@@ -1,0 +1,7 @@
+path: /Users/HetviSheth/Flood_Prediction/newmodel/master_dataset
+train: train/images
+val: valid/images
+test: test/images
+
+nc: 2
+names: ['flood', 'water_body']

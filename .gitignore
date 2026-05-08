@@ -29,3 +29,16 @@ runs/
 
 # videos
 *.mp4
+
+# RAINWISE V3.1 - Dataset & Training Ignores
+**/master_dataset/
+**/classification_dataset/
+**/datasets/
+**/training_runs/
+**/hf_training_runs/
+**/runs/
+*.zip
+*.cache
+*.pt
+*.safetensors
+newmodel/hf_flood_model_final/
