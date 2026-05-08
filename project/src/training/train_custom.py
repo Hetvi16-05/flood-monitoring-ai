@@ -49,7 +49,11 @@ def start_training():
     WEIGHTS_DIR = PROJECT_ROOT / "weights"; WEIGHTS_DIR.mkdir(exist_ok=True)
     VISUAL_DIR = PROJECT_ROOT / "visual_val_v3_1"
     
-    NUM_CLASSES = 2; BATCH_SIZE = 8; LEARNING_RATE = 1e-4; EPOCHS = 40
+    NUM_CLASSES = 2
+    BATCH_SIZE = int(os.getenv("BATCH_SIZE", 8))
+    LEARNING_RATE = 1e-4
+    EPOCHS = int(os.getenv("EPOCHS", 40))
+    USE_AMP = os.getenv("USE_AMP", "0") == "1"
     
     train_dataset = FloodCustomDataset(str(DATASET_ROOT / "train" / "images"), 
                                        masks_dir=str(DATASET_ROOT / "train" / "masks_hq"), balance=True)
@@ -76,14 +80,30 @@ def start_training():
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=3)
     criterion = DiceFocalLoss()
     
+    # Gradient Scaler for AMP
+    scaler = torch.cuda.amp.GradScaler(enabled=USE_AMP)
+    
     best_iou = 0.0
     for epoch in range(EPOCHS):
         model.train(); train_loss = 0
         pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{EPOCHS}")
         for data, mask, _ in pbar:
             data, mask = data.to(device), mask.to(device)
-            optimizer.zero_grad(); output = model(data); loss = criterion(output, mask)
-            loss.backward(); optimizer.step(); train_loss += loss.item()
+            optimizer.zero_grad()
+            
+            with torch.cuda.amp.autocast(enabled=USE_AMP):
+                output = model(data)
+                loss = criterion(output, mask)
+            
+            if USE_AMP:
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                optimizer.step()
+                
+            train_loss += loss.item()
             pbar.set_postfix({"loss": f"{loss.item():.4f}"})
 
         model.eval(); v_metrics = {"loss": 0, "iou": 0, "dice": 0, "prec": 0, "rec": 0}

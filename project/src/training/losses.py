@@ -24,19 +24,23 @@ class DiceFocalLoss(nn.Module):
         num_classes = pred.shape[1]
         total_loss = 0
         
+        # Ensure pred is in float32 for loss stability if using AMP
+        pred = pred.float()
+        
         # We iterate through foreground classes
         for i in range(num_classes):
-            p = torch.sigmoid(pred[:, i])
+            logits = pred[:, i]
+            p = torch.sigmoid(logits)
             t = (target == i).float()
             
-            # 1. Focal Loss Component
-            bce = F.binary_cross_entropy(p, t, reduction='none')
+            # 1. Focal Loss Component - Using with_logits for stability
+            bce = F.binary_cross_entropy_with_logits(logits, t, reduction='none')
             p_t = p * t + (1 - p) * (1 - t)
             f_loss = self.alpha * (1 - p_t)**self.gamma * bce
             f_loss = f_loss.mean()
             
             # 2. Dice Loss Component
-            d_loss = self.dice_loss(pred[:, i], t, self.smooth)
+            d_loss = self.dice_loss(logits, t, self.smooth)
             
             total_loss += (0.5 * f_loss + 0.5 * d_loss)
             

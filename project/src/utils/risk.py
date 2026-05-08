@@ -23,21 +23,23 @@ def get_flood_risk(water_p, has_person=False, has_animal=False, has_vehicle=Fals
     elif water_p > 60:
         score += 20  # Bonus for high water coverage
     
-    # 3. Object Multipliers (Crocodile gets highest priority)
+    # 3. Object Multipliers (Crocodile & Animal Priority)
     if has_crocodile: 
         score += 30  # Crocodiles are extremely dangerous in floods
     if has_person: score += 15
-    if has_animal: score += 10
+    if has_animal: score += 35 # [VIVA FIX] Jump straight to high priority
     if has_vehicle: score += 5
     
     # 4. Object-in-Flood (OIF)
     if oif_detected:
         if has_crocodile: score += 35  # Crocodile in water = immediate danger
         elif has_person: score += 25
-        elif has_animal: score += 15
+        elif has_animal: score += 40 # Animal in water = HIGH RISK
         else: score += 10
     
-    # 5. Crocodile Special Rule: Any crocodile detection with water = DANGEROUS
+    # 5. Crocodile/Animal Special Rule: Forced High Risk
+    if has_animal and water_p > 2:
+        return HIGH, max(70, int(score))
     if has_crocodile and water_p > 5:
         return DANGEROUS, 100
     

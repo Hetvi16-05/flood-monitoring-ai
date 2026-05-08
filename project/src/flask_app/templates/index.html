@@ -100,11 +100,11 @@
                             </div>
                         </div>
                         
-                        <div class="card telemetry-card">
-                            <h3>Flow Speed</h3>
+                        <div class="card telemetry-card lstm-card">
+                            <h3>LSTM Predictive Insight</h3>
                             <div class="value-container">
-                                <span class="tele-value" id="flow-speed">0.00</span>
-                                <small>px/f</small>
+                                <span class="tele-value" id="lstm-prediction">CALCULATING...</span>
+                                <small>Expected Risk Score</small>
                             </div>
                         </div>
 
@@ -129,9 +129,21 @@
                         <canvas id="mainChart"></canvas>
                     </div>
 
+                    <div class="card chart-card forecast-card">
+                        <h3>🔮 Future Risk Trend (+1h, +3h, +6h)</h3>
+                        <canvas id="forecastChart"></canvas>
+                    </div>
+
                     <!-- Insights / Alerts -->
                     <div class="card insights-card">
-                        <h3>🎯 Real-Time Insights</h3>
+                        <div class="card-header">
+                            <h3>🎯 Real-Time Insights</h3>
+                        </div>
+                        <div id="emergency-alert" class="emergency-banner hidden">
+                            <span class="icon">🚨</span>
+                            <span id="emergency-msg"></span>
+                        </div>
+                        <div id="early-warning-badge" class="alert-badge hidden"></div>
                         <div id="insights-list" class="insights-list">
                             <p class="no-data">Waiting for analysis...</p>
                         </div>
@@ -191,6 +203,13 @@
                                     <span class="slider round"></span>
                                 </label>
                                 <span>Show Flood Mask</span>
+                            </div>
+                            <div class="setting-controls" style="margin-top: 1rem;">
+                                <label class="switch">
+                                    <input type="checkbox" id="explain-ai" onchange="updateSettings()">
+                                    <span class="slider round"></span>
+                                </label>
+                                <span style="color: var(--accent-color); font-weight: 600;">AI Explanation Mode (XAI)</span>
                             </div>
                         </div>
 

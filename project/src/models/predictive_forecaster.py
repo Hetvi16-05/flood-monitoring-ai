@@ -4,8 +4,16 @@ Predicts flood risk 1-6 hours ahead using weather data and historical patterns
 """
 import requests
 import numpy as np
+import torch
 from datetime import datetime, timedelta
 from collections import deque
+import os
+import sys
+from pathlib import Path
+
+# Add project src to path if needed
+sys.path.append(str(Path(__file__).parent.parent))
+from models.flood_lstm import FloodLSTM
 
 
 class PredictiveForecaster:
@@ -29,6 +37,12 @@ class PredictiveForecaster:
         
         # Weather API endpoint (OpenWeatherMap)
         self.weather_url = "https://api.openweathermap.org/data/2.5/forecast"
+        
+        # LSTM Model
+        self.lstm_model = None
+        self.lstm_config = {}
+        self.lstm_normalization = {}
+        self.data_history = deque(maxlen=history_length) # Stores [water_p, rain_mm, risk_score]
     
     def fetch_weather_data(self, lat, lon):
         """
@@ -178,7 +192,40 @@ class PredictiveForecaster:
         
         return probability, risk_factors
     
-    def predict_flood_risk(self, lat, lon, current_risk_score):
+    def load_lstm(self, model_path):
+        """
+        Load trained LSTM model and its configuration
+        """
+        if not os.path.exists(model_path):
+            print(f"⚠️ LSTM Model not found at {model_path}")
+            return False
+            
+        try:
+            # Note: weights_only=False is used because the checkpoint contains numpy arrays for normalization
+            checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
+            config = checkpoint['config']
+            
+            self.lstm_model = FloodLSTM(
+                input_size=config['input_size'],
+                hidden_size=config['hidden_size'],
+                num_layers=config['num_layers'],
+                output_size=config.get('output_size', 1)
+            )
+            self.lstm_model.load_state_dict(checkpoint['model_state_dict'])
+            self.lstm_model.eval()
+            
+            self.lstm_config = config
+            self.lstm_normalization = {
+                'min': checkpoint['min_val'],
+                'max': checkpoint['max_val']
+            }
+            print(f"✅ LSTM Model loaded successfully from {model_path}")
+            return True
+        except Exception as e:
+            print(f"❌ Error loading LSTM model: {e}")
+            return False
+
+    def predict_flood_risk(self, lat, lon, current_risk_score, current_water_p=0, current_rain=0):
         """
         Predict flood risk for next 1-6 hours
         
@@ -186,16 +233,33 @@ class PredictiveForecaster:
             lat: Latitude
             lon: Longitude
             current_risk_score: Current flood risk score
+            current_water_p: Current water percentage (from vision)
+            current_rain: Current rainfall mm
             
         Returns:
             prediction: Dictionary with prediction results
         """
+        # Store in history for LSTM
+        self.data_history.append([current_water_p, current_rain, current_risk_score])
+        
         # Fetch weather data
         weather_data = self.fetch_weather_data(lat, lon)
         
-        # Calculate flood probability
+        # Calculate rule-based probability (baseline)
         probability, risk_factors = self.calculate_flood_probability(weather_data, current_risk_score)
         
+        # Override with LSTM if enough history is available
+        lstm_forecast = None
+        if self.lstm_model and len(self.data_history) >= self.lstm_config.get('seq_length', 12):
+            lstm_forecast = self._predict_with_lstm()
+            if lstm_forecast is not None:
+                # Use the immediate next step (+1h) for current probability adjustment
+                next_risk = lstm_forecast[0]
+                probability = (probability + (next_risk / 100.0)) / 2
+                risk_factors.append(f"LSTM Forecast (+1h): {next_risk:.1f} predicted risk")
+                if len(lstm_forecast) > 1:
+                    risk_factors.append(f"LSTM Forecast (+6h): {lstm_forecast[-1]:.1f} predicted risk")
+
         # Store in history
         self.risk_history.append(current_risk_score)
         if weather_data:
@@ -220,10 +284,46 @@ class PredictiveForecaster:
             'level': level,
             'hours_ahead': hours_ahead,
             'risk_factors': risk_factors,
-            'timestamp': datetime.now()
+            'timestamp': datetime.now(),
+            'lstm_score': lstm_forecast[0] if lstm_forecast else None,
+            'forecast_sequence': lstm_forecast,
+            'emergency': self.check_for_emergencies(lstm_forecast) if lstm_forecast else None
         }
         
         return prediction
+
+    def _predict_with_lstm(self):
+        """
+        Internal method to run LSTM inference
+        """
+        try:
+            seq_len = self.lstm_config['seq_length']
+            data = np.array(list(self.data_history))[-seq_len:]
+            
+            # Normalize
+            data = (data - self.lstm_normalization['min']) / (self.lstm_normalization['max'] - self.lstm_normalization['min'] + 1e-6)
+            
+            # Convert to tensor
+            input_tensor = torch.tensor(data, dtype=torch.float32).unsqueeze(0) # [1, seq, features]
+            
+            with torch.no_grad():
+                output = self.lstm_model(input_tensor) # [1, output_size]
+                
+            # Denormalize (risk score is index 2)
+            # Normalization was (val - min) / (max - min)
+            # So val = norm * (max - min) + min
+            pred_norms = output.squeeze().cpu().numpy()
+            if pred_norms.ndim == 0:
+                pred_norms = np.array([pred_norms])
+                
+            min_risk = self.lstm_normalization['min'][2]
+            max_risk = self.lstm_normalization['max'][2]
+            pred_scores = pred_norms * (max_risk - min_risk) + min_risk
+            
+            return [float(s) for s in pred_scores]
+        except Exception as e:
+            print(f"⚠️ LSTM Prediction failed: {e}")
+            return None
     
     def get_early_warning(self, prediction):
         """
@@ -269,6 +369,24 @@ class PredictiveForecaster:
             return 'decreasing', trend_rate
         else:
             return 'stable', trend_rate
+
+    def check_for_emergencies(self, forecast_sequence):
+        """
+        Check for rapid risk escalation in the forecast
+        """
+        if not forecast_sequence or len(forecast_sequence) < 2:
+            return None
+            
+        # If risk jumps by more than 30 points between steps, or reaches > 80
+        start_risk = forecast_sequence[0]
+        end_risk = forecast_sequence[-1]
+        
+        if end_risk > 85:
+            return "CRITICAL: Flood imminent within 6 hours!"
+        if end_risk - start_risk > 25:
+            return "ALARM: Rapid risk escalation detected!"
+            
+        return None
 
 
 def get_default_weather_api_key():

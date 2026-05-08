@@ -36,7 +36,7 @@ def get_logger(name):
 def log_to_csv(water_p, obj_summary, risk_level, risk_score, rain, location):
     """
     PRODUCTION LOGGING:
-    Records Timestamp, Water %, Object Summary, Rain, Risk Level, Risk Score, Location
+    Records Timestamp, Water_P, Object_Summary, Rain_mm, Risk_Level, Risk_Score, Location
     """
     try:
         project_root = str(Path(__file__).resolve().parents[3])
@@ -47,13 +47,13 @@ def log_to_csv(water_p, obj_summary, risk_level, risk_score, rain, location):
         with open(csv_path, 'a', newline='') as f:
             writer = csv.writer(f)
             if is_new:
-                writer.writerow(["Timestamp", "Water_%", "Object_Summary", "Rain_mm", "Risk_Level", "Risk_Score", "Location"])
+                writer.writerow(["Timestamp", "Water_P", "Object_Summary", "Rain_mm", "Risk_Level", "Risk_Score", "Location"])
             
             writer.writerow([
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 f"{water_p:.2f}",
                 obj_summary if obj_summary else "None",
-                rain,
+                f"{rain:.2f}" if isinstance(rain, (int, float)) else rain,
                 risk_level,
                 f"{risk_score}",
                 location

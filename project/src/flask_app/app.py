@@ -40,6 +40,7 @@ user_settings = {
     "show_mask": True,
     "enable_sound": True,
     "enable_email": False,
+    "explain_ai": False,
     "alert_email": ""
 }
 
@@ -100,13 +101,33 @@ def gen_frames(camera_source=0):
                 res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_hybrid(
                     frame, models, 
                     show_yolo=user_settings['show_yolo'], 
-                    show_mask=user_settings['show_mask']
+                    show_mask=user_settings['show_mask'],
+                    explain_ai=user_settings['explain_ai']
                 )
                 
                 # IMPORTANT: Update global state
                 telemetry['risk_level'] = risk_level
                 telemetry['risk_score'] = risk_score
                 telemetry['water_p'] = water_p
+                
+                # Use forecaster for temporal prediction
+                forecaster = models['forecaster']
+                lat, lon, _ = get_location()
+                rain = get_rainfall(lat, lon)
+                
+                prediction = forecaster.predict_flood_risk(
+                    lat=lat, lon=lon, 
+                    current_risk_score=risk_score,
+                    current_water_p=water_p,
+                    current_rain=rain
+                )
+                
+                telemetry['prediction'] = prediction
+                telemetry['early_warning'] = forecaster.get_early_warning(prediction)
+                
+                # Critical Emergency Alert
+                if prediction.get('emergency'):
+                    telemetry['emergency_alert'] = prediction['emergency']
                 
                 last_telemetry = telemetry
                 
@@ -168,14 +189,31 @@ def predict():
         res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_hybrid(
             frame, models,
             show_yolo=user_settings['show_yolo'],
-            show_mask=user_settings['show_mask']
+            show_mask=user_settings['show_mask'],
+            explain_ai=user_settings['explain_ai']
         )
         
         # Update state
         last_telemetry = telemetry
+        
+        # Use forecaster for prediction
+        forecaster = models['forecaster']
+        lat, lon, _ = get_location()
+        rain = get_rainfall(lat, lon)
+        prediction = forecaster.predict_flood_risk(
+            lat=lat, lon=lon, 
+            current_risk_score=risk_score,
+            current_water_p=water_p,
+            current_rain=rain
+        )
+        
         last_telemetry['risk_level'] = str(risk_level)
         last_telemetry['risk_score'] = float(risk_score)
         last_telemetry['water_p'] = float(water_p)
+        last_telemetry['prediction'] = prediction
+        last_telemetry['early_warning'] = forecaster.get_early_warning(prediction)
+        if prediction.get('emergency'):
+            last_telemetry['emergency_alert'] = prediction['emergency']
         
         # Log to CSV
         try:

@@ -1,4 +1,5 @@
 let mainChart = null;
+let forecastChart = null;
 let isStreaming = false;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -66,6 +67,31 @@ function initChart() {
             }
         }
     });
+
+    const fctx = document.getElementById('forecastChart').getContext('2d');
+    forecastChart = new Chart(fctx, {
+        type: 'bar',
+        data: {
+            labels: ['Now', '+1h', '+3h', '+6h'],
+            datasets: [{
+                label: 'Predicted Risk',
+                data: [0, 0, 0, 0],
+                backgroundColor: ['#38bdf8', '#38bdf8', '#f59e0b', '#ef4444'],
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, max: 100, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+                x: { grid: { display: false } }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
 }
 
 function updateStatus() {
@@ -81,9 +107,48 @@ function updateStatus() {
             document.getElementById('risk-progress').style.width = (tele.risk_score || 0) + '%';
             document.getElementById('water-percent').innerText = (tele.water_p || 0).toFixed(1) + '%';
             document.getElementById('avg-depth').innerText = (tele.avg_water_depth || 0).toFixed(2) + 'm';
-            document.getElementById('flow-speed').innerText = (tele.flow_speed || 0).toFixed(2);
             document.getElementById('expansion-rate').innerText = ((tele.expansion_rate || 0) * 100).toFixed(1) + '%';
             document.getElementById('submersion-score').innerText = ((tele.submersion || 0) * 100).toFixed(1) + '%';
+            
+            // LSTM Prediction Update
+            const lstmEl = document.getElementById('lstm-prediction');
+            if (lstmEl) {
+                if (tele.prediction && tele.prediction.lstm_score !== null && tele.prediction.lstm_score !== undefined) {
+                    lstmEl.innerText = tele.prediction.lstm_score.toFixed(1);
+                } else {
+                    lstmEl.innerText = 'COLLECTING...';
+                }
+            }
+
+            // Early Warning Update
+            const warningBadge = document.getElementById('early-warning-badge');
+            if (warningBadge) {
+                if (tele.early_warning) {
+                    warningBadge.innerText = tele.early_warning;
+                    warningBadge.classList.remove('hidden');
+                } else {
+                    warningBadge.classList.add('hidden');
+                }
+            }
+
+            // Emergency Alert Update
+            const emergencyBanner = document.getElementById('emergency-alert');
+            const emergencyMsg = document.getElementById('emergency-msg');
+            if (emergencyBanner && emergencyMsg) {
+                if (tele.emergency_alert) {
+                    emergencyMsg.innerText = tele.emergency_alert;
+                    emergencyBanner.classList.remove('hidden');
+                } else {
+                    emergencyBanner.classList.add('hidden');
+                }
+            }
+
+            // Update Forecast Chart
+            if (forecastChart && tele.prediction && tele.prediction.forecast_sequence) {
+                const sequence = tele.prediction.forecast_sequence;
+                forecastChart.data.datasets[0].data = [tele.risk_score, ...sequence];
+                forecastChart.update('none');
+            }
 
             // Risk Color Coding
             const rl = tele.risk_level;
@@ -260,6 +325,7 @@ function processYoutube() {
 function updateSettings() {
     const showYolo = document.getElementById('show-yolo').checked;
     const showMask = document.getElementById('show-mask').checked;
+    const explainAi = document.getElementById('explain-ai').checked;
     const enableSound = document.getElementById('enable-sound').checked;
     const enableEmail = document.getElementById('enable-email').checked;
     const alertEmail = document.getElementById('alert-email').value;
@@ -272,6 +338,7 @@ function updateSettings() {
     const settings = {
         show_yolo: showYolo,
         show_mask: showMask,
+        explain_ai: explainAi,
         enable_sound: enableSound,
         enable_email: enableEmail,
         alert_email: alertEmail

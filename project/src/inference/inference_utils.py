@@ -8,7 +8,7 @@ from utils.risk import get_flood_risk
 from preprocessing.feature_engineering import extract_hybrid_features
 from models.crocodile_detector import CrocodileDetector, get_default_crocodile_model_path
 from models.depth_estimator import DepthEstimator
-from models.depth_estimator import DepthEstimator
+from models.explainability import FloodGradCAM, overlay_heatmap
 from models.temporal_tracker import TemporalFloodTracker
 
 def apply_morphology(mask):
@@ -59,7 +59,7 @@ def spatial_fusion(flood_mask, yolo_detections, orig_w, orig_h, overlap_thresh=0
     obj_summary = ", ".join([f"{k}({v})" for k, v in counts.items()]) if counts else "None"
     return valid_boxes, has_person, has_animal, has_vehicle, has_crocodile, obj_summary
 
-def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=None):
+def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, explain_ai=False, lat=None, lon=None):
     """
     Production-level hybrid fusion inference with advanced AI monitoring telemetry.
     Returns: (display_img, water_p, obj_summary, risk_level, risk_score, telemetry)
@@ -121,12 +121,13 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
     # 2. MULTI-CHANNEL SEGMENTATION
     img_resized = cv2.resize(img_rgb, INF_SIZE)
     
-    # Check model requirements
-    if hasattr(seg, 'backbone') and 'swin' in str(type(seg.backbone)).lower():
-        # SwinFloodNet expects 6 channels (3 RGB + 3 Features)
-        feat_channels = 3
-    else:
-        # DeepLabV3+ expects 5 channels (3 RGB + 2 Features)
+    # [ROBUST FIX] Detect required channels by inspecting the model's first layer
+    try:
+        first_layer = next(seg.parameters())
+        expected_channels = first_layer.shape[1]
+        feat_channels = 3 if expected_channels == 6 else 2
+    except:
+        # Fallback to legacy
         feat_channels = 2
         
     hybrid_feat = extract_hybrid_features(img_resized, channels=feat_channels).astype(np.float32)
@@ -148,13 +149,21 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
             top_px = torch.topk(probs[0, i].flatten(), k=max(1, int(INF_SIZE[0]*INF_SIZE[1]*0.01)))[0]
             seg_class_scores[cls_name] = top_px.mean().item()
             
-        # [ROBUSTNESS FIX] Apply confidence threshold for water (class 0)
-        # Lowered to 0.4 based on user feedback — 0.8 was too strict for murky water
+        # [SENSITIVITY BOOST] Lowered to 0.15 for muddy monsoon water
         water_probs = probs[0, 0]
         pred = torch.argmax(out, dim=1)[0].cpu().numpy().astype(np.uint8)
         
         # Override: if it's class 0 but low prob, make it 'road' (class 1) or background
-        pred[(pred == 0) & (water_probs.cpu().numpy() < 0.4)] = 1 
+        pred[(pred == 0) & (water_probs.cpu().numpy() < 0.15)] = 1 
+        
+    # 2b. Explainable AI (Grad-CAM)
+    xai_heatmap = None
+    if explain_ai and model_dict.get('gcam'):
+        try:
+            # Generate heatmap for class 0 (Flood Water)
+            xai_heatmap = model_dict['gcam'].generate_heatmap(tensor, class_idx=0)
+        except Exception as e:
+            print(f"⚠️ Grad-CAM failed: {e}")
     
     pred = apply_morphology(pred)
     
@@ -275,6 +284,10 @@ def run_hybrid(frame, model_dict, show_yolo=True, show_mask=True, lat=None, lon=
             mask_c[pred == i] = color
         mask_c = cv2.resize(mask_c, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST)
         display_img = cv2.addWeighted(display_img, 0.7, mask_c, 0.3, 0)
+    
+    if explain_ai and xai_heatmap is not None:
+        # Scale heatmap to original size and overlay
+        display_img = overlay_heatmap(display_img, xai_heatmap, alpha=0.4)
     
     # All text overlays removed - clean visualization
 
