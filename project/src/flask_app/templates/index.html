@@ -17,6 +17,12 @@
                 <h1>RAINWISE AI</h1>
             </div>
             
+            <!-- Language Toggle (First Prize Feature) -->
+            <div class="lang-toggle">
+                <button class="btn-sm btn-outline active" onclick="setLanguage('en')">EN</button>
+                <button class="btn-sm btn-outline" onclick="setLanguage('gu')">ગુજરાતી</button>
+            </div>
+            
             <nav class="menu">
                 <div class="menu-item active" onclick="showSection('dashboard', this)">
                     <span class="icon">📊</span>
@@ -140,6 +146,11 @@
                         <div id="early-warning-badge" class="alert-badge hidden"></div>
                         <div id="insights-list" class="insights-list">
                             <p class="no-data">Waiting for analysis...</p>
+                        </div>
+                        
+                        <!-- Expert Feature: Audit Report -->
+                        <div class="report-zone" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <button class="btn btn-secondary btn-full" onclick="generateReport()">📥 Download Disaster Audit Report</button>
                         </div>
                     </div>
                 </div>

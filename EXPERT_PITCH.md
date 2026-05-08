@@ -35,6 +35,29 @@ Our system uses a **Hybrid Ensemble Architecture** optimized for edge deployment
 
 ---
 
+## 5. Computer Vision: Technical Deep Dive
+### **I. Open-Vocabulary Detection (YOLO-World)**
+- **Methodology**: Unlike traditional closed-set detectors (which only find "classes" they were trained on), we utilize **Zero-Shot Learning**.
+- **CV Logic**: The model uses a **Dual-Encoder Architecture** (Vision + Text). It maps the visual features of the image into a shared embedding space with the text string "Crocodile." This allows the system to detect predators with high semantic accuracy even in novel environments.
+
+### **II. Hierarchical Transformer Segmentation (SegFormer)**
+- **Methodology**: Moving beyond U-Net or ResNet-based CNNs.
+- **CV Logic**: We use a **Transformer Encoder** that extracts both local and global features. The self-attention mechanism allows the model to understand the "Context" (e.g., distinguishing between a blue swimming pool and muddy floodwater) based on surrounding pixels, not just local texture.
+
+### **III. Dense Optical Flow (Farneback Algorithm)**
+- **Methodology**: Estimating water velocity.
+- **CV Logic**: We compute the **displacement vectors** of pixels between successive frames. By applying a binary mask to these vectors, we calculate the **Mean Magnitude of Flow** specifically within the water region, providing a real-time "Velocity Telemetry."
+
+### **IV. Multi-Spectral Fusion (The Water Mask)**
+- **Methodology**: 3-Source Validation.
+- **CV Logic**:
+    1. **Semantic Mask**: Output from SegFormer (AI opinion).
+    2. **Spectral Proxy**: Calculated NDWI (Normalized Difference Water Index) using RGB spectral responses.
+    3. **Texture Gradient**: Sobel magnitude analysis to identify the low-entropy (smooth) surface characteristic of floodwater.
+- **Result**: A **Decision-Level Fusion** that eliminates false positives from reflections on glass or wet pavement.
+
+---
+
 ## 4. Real-World Value Proposition
 1. **Rescue Optimization**: Emergency services receive the "Predator Warning" before they deploy boats, ensuring team safety.
 2. **Infrastructure Protection**: Real-time expansion rate monitoring helps utilities (Power/Water) shut down grids before they are submerged.

@@ -205,12 +205,8 @@ def predict():
         
         bundle = get_models()
         models = bundle['models']
-        
-        res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_hybrid(
-            frame, models,
-            show_yolo=user_settings['show_yolo'],
-            show_mask=user_settings['show_mask'],
-            explain_ai=user_settings['explain_ai']
+        res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_advanced_hybrid(
+            frame, bundle['engine']
         )
         
         # Update state

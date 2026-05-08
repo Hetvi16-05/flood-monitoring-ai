@@ -479,3 +479,44 @@ input:checked + .slider:before {
     50% { opacity: 1; transform: scale(1); }
     100% { opacity: 0.8; transform: scale(0.98); }
 }
+/* --- FIRST PRIZE UI ADDITIONS --- */
+.lang-toggle {
+    display: flex;
+    gap: 0.5rem;
+    margin: 1rem 0;
+    padding: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+}
+
+.lang-toggle button {
+    flex: 1;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-dim);
+    padding: 0.4rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+}
+
+.lang-toggle button.active {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+    box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3);
+}
+
+.btn-full {
+    width: 100%;
+    margin-top: 1rem;
+    padding: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.report-zone button:hover {
+    background: #10b981 !important; /* Green for success/audit */
+    transform: translateY(-2px);
+}

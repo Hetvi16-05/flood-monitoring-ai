@@ -29,21 +29,23 @@ class CrocodileDetector:
             print(f"❌ Failed to load YOLO-World: {e}")
             self.model = None
     
-    def detect(self, frame):
+    def detect(self, frame, conf_threshold=None):
         """
         Detect crocodiles in frame
         
         Args:
             frame: Input image (numpy array)
+            conf_threshold: Optional confidence override
             
         Returns:
             List of detections: [{'box': [x1, y1, x2, y2], 'conf': float, 'type': 'crocodile'}]
         """
         if self.model is None:
             return []
-        
         try:
-            results = self.model.predict(frame, conf=self.conf_threshold, verbose=False)[0]
+            # Use override threshold if provided, else fall back to init default
+            thresh = conf_threshold if conf_threshold is not None else self.conf_threshold
+            results = self.model.predict(frame, conf=thresh, verbose=False)[0]
             detections = []
             
             for box in results.boxes:

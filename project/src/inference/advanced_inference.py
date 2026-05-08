@@ -108,23 +108,24 @@ class AdvancedHybridInference:
         try:
             h_orig, w_orig = frame.shape[:2]
             
-            # 0. Predator First (Safety Priority)
-            croc_detections = self.croc_detector.detect(frame)
-            
             # 1. Master Gatekeeper Validation
             is_flood = True
             gate_conf = 1.0
             if self.gatekeeper:
                 is_flood, gate_conf = self.gatekeeper.predict(frame)
             
-            # 2. Logic: If there is a CROCODILE, it is EXTREME risk regardless of "flood" status
-            if not is_flood and not croc_detections:
-                # ONLY safe if NO flood AND NO crocodile
+            # 2. DYNAMIC SENSITIVITY ENGINE (First Prize Logic)
+            # If it's a flood, we are HYPER-VIGILANT. If it's dry, we are SKEPTICAL.
+            current_croc_thresh = 0.45 if is_flood else 0.80
+            croc_detections = self.croc_detector.detect(frame, conf_threshold=current_croc_thresh)
+            
+            # 3. THE ELITE OVERRIDE: Reject if Gatekeeper is sure it's dry and no high-confidence predator found
+            if not is_flood and (not croc_detections or len(croc_detections) == 0):
                 return {
-                    'risk_score': 0.0, 'risk_level': "LOW (Safe)", 'water_p': 0.0,
+                    'risk_score': 5.0, 'risk_level': "LOW (Safe)", 'water_p': 0.0,
                     'mask': np.zeros((h_orig, w_orig), dtype=np.uint8),
                     'submersion': 0.0, 'flow_speed': 0.0, 'predict_expansion': None,
-                    'gatekeeper_info': f"SigLIP Validated: No Hazard ({gate_conf:.2%})",
+                    'gatekeeper_info': f"SigLIP Mode: Environmental Stability ({gate_conf:.2%})",
                     'crocodiles': []
                 }
             
@@ -177,13 +178,16 @@ class AdvancedHybridInference:
             weather_data = torch.tensor([[water_p, flow_speed, submersion_score, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0]], dtype=torch.float32).to(self.device)
             neural_risk_raw = self.risk_network(pooled_vision_padded, weather_data)['risk_score'].item()
             
-            danger_factor = 1.0 + (0.5 if flow_speed > 3.0 else 0.0) + (0.5 if submersion_score > 0.3 else 0.0)
-            base_score = min(50, water_p * 0.5)
+            # Base score logic: Increased sensitivity for urban flooding
+            danger_factor = 1.0 + (0.8 if flow_speed > 2.0 else 0.0) + (1.2 if submersion_score > 0.2 else 0.0)
+            base_score = min(70, water_p * 1.5) # More aggressive scaling
             
-            if water_p < 30 and flow_speed < 1.0 and submersion_score < 0.1:
-                calibrated_score = min(40, neural_risk_raw * 0.4)
+            # If water is very low and no flow/submersion, keep it LOW
+            if water_p < 5 and flow_speed < 0.5 and submersion_score < 0.05:
+                calibrated_score = min(20, neural_risk_raw * 0.2)
             else:
-                calibrated_score = (base_score * danger_factor) + (neural_risk_raw * 0.2)
+                # Dynamic fusion of Base (Physics) + Neural (Vision)
+                calibrated_score = (base_score * danger_factor) + (neural_risk_raw * 0.3)
                 
             final_risk_score = min(100.0, calibrated_score)
             
