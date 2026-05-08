@@ -10,6 +10,8 @@ from models.flood_net import FloodNet
 from models.emergency_detector import EmergencyDetector
 from models.temporal_model import TemporalEvolutionModel
 from models.risk_network import HybridRiskNetwork
+from models.flood_classifier import FloodClassifierSigLIP
+from models.crocodile_detector import CrocodileDetector
 
 # Robust config import
 try:
@@ -33,6 +35,17 @@ class AdvancedHybridInference:
         self.emergency_detector = EmergencyDetector(num_classes=5).to(self.device)
         self.temporal_model = TemporalEvolutionModel(sequence_length=16, predict_steps=5).to(self.device)
         self.risk_network = HybridRiskNetwork(vision_feature_dim=1024, tabular_dim=10).to(self.device)
+        
+        # 0. Master Gatekeeper (98.89% Accuracy Brain)
+        try:
+            self.gatekeeper = FloodClassifierSigLIP(device=self.device)
+            print("🛡️ Gatekeeper: Active and Ready (SigLIP)")
+        except Exception as e:
+            self.gatekeeper = None
+            print(f"⚠️ Warning: Gatekeeper could not initialize: {e}")
+            
+        # 0b. Crocodile Predator Detection (YOLO-World)
+        self.croc_detector = CrocodileDetector(device=self.device)
         
         # Load the newly trained Custom V3 Weights if available
         ROOT = Path(__file__).resolve().parents[3]
@@ -102,6 +115,22 @@ class AdvancedHybridInference:
 
     def process(self, frame):
         h_orig, w_orig = frame.shape[:2]
+        
+        # 0. Master Gatekeeper Validation
+        if self.gatekeeper:
+            is_flood, gate_conf = self.gatekeeper.predict(frame)
+            if not is_flood:
+                # INSTANT REJECTION: Zero False Positive Shield
+                return {
+                    'risk_score': 0.0,
+                    'risk_level': "LOW (Safe)",
+                    'water_p': 0.0,
+                    'mask': np.zeros((h_orig, w_orig), dtype=np.uint8),
+                    'submersion': 0.0,
+                    'flow_speed': 0.0,
+                    'predict_expansion': None,
+                    'gatekeeper_info': f"SigLIP Validated: Dry Road ({gate_conf:.2%})"
+                }
         
         # 1. Segmentation (FloodNet)
         input_6c = self.prepare_6_channels(frame)
@@ -192,6 +221,13 @@ class AdvancedHybridInference:
             'predict_expansion': expansion_heatmap if expansion_heatmap is None else cv2.resize(expansion_heatmap, (w_orig, h_orig))
         }
         
+        # 6. Check for Predators (Crocodiles)
+        res['crocodiles'] = self.croc_detector.detect(frame)
+        if res['crocodiles']:
+            # Force Risk Level to EXTREME if a crocodile is in the water
+            res['risk_level'] = "EXTREME (PREDATOR)"
+            res['risk_score'] = max(res['risk_score'], 95.0)
+        
         return res
 
     def render(self, frame, res):
@@ -205,6 +241,22 @@ class AdvancedHybridInference:
             exp_mask = (res['predict_expansion'] > 0.5).astype(np.uint8)
             contours, _ = cv2.findContours(exp_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             cv2.drawContours(output, contours, -1, (0, 0, 255), 1)
+            
+        # [ALERT] Show Crocodile Warning
+        if res.get('crocodiles'):
+            for det in res['crocodiles']:
+                x1, y1, x2, y2 = det['box']
+                # Draw sharp Red Box around the Croc
+                cv2.rectangle(output, (x1, y1), (x2, y2), (0, 0, 255), 3)
+                cv2.putText(output, "🐊 CROCODILE DETECTED!", (x1, y1-10), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+            
+            # Global Alert Header
+            overlay = output.copy()
+            cv2.rectangle(overlay, (0, 0), (w, 60), (0, 0, 255), -1)
+            cv2.addWeighted(overlay, 0.5, output, 0.5, 0, output)
+            cv2.putText(output, "⚠️ HIGH DANGER: PREDATOR IN WATER", (w//2-200, 40), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 3)
         
         return output
 

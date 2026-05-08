@@ -15,35 +15,19 @@ class CrocodileDetector:
     """
     
     def __init__(self, model_path=None, device='cpu', conf_threshold=0.3):
-        """
-        Initialize crocodile detector
-        
-        Args:
-            model_path: Path to pre-trained crocodile detection model (.pt file)
-            device: Device to run inference on ('cpu', 'cuda', 'mps')
-            conf_threshold: Confidence threshold for crocodile detection
-        """
         self.device = device
         self.conf_threshold = conf_threshold
-        self.model = None
         
-        if model_path and os.path.exists(model_path):
-            self.load_model(model_path)
-        else:
-            print("⚠️ Crocodile detector model not found. Using fallback detection.")
-            self.model = None
-    
-    def load_model(self, model_path):
-        """Load pre-trained crocodile detection model"""
+        print("🌐 Initializing YOLO-World Zero-Shot Crocodile Detector...")
         try:
-            self.model = YOLO(model_path)
+            # Use the official YOLOv8-World model (High-tech!)
+            self.model = YOLO('yolov8s-worldv2.pt') 
+            self.model.set_classes(["crocodile"]) # Lock on to crocodiles
             self.model.to(self.device)
-            print(f"✅ Crocodile detector loaded from: {model_path}")
-            return True
+            print("✅ YOLO-World active: Detecting 'Crocodile' via Natural Language.")
         except Exception as e:
-            print(f"❌ Failed to load crocodile detector: {e}")
+            print(f"❌ Failed to load YOLO-World: {e}")
             self.model = None
-            return False
     
     def detect(self, frame):
         """
