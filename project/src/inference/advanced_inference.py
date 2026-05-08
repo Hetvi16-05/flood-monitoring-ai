@@ -108,25 +108,34 @@ class AdvancedHybridInference:
         try:
             h_orig, w_orig = frame.shape[:2]
             
+            # 0. HYPER-VIGILANT MULTI-HAZARD DETECTION (First Prize Engine)
+            # We look for Crocodiles, People, Vehicles, and Boats simultaneously
+            # Threshold set to 0.15 for maximum situational awareness
+            all_detections = self.croc_detector.detect(frame, conf_threshold=0.15)
+            
+            croc_detections = [d for d in all_detections if d['name'] in ['crocodile', 'alligator', 'large reptile']]
+            people_detections = [d for d in all_detections if d['name'] in ['person', 'human', 'child']]
+            vehicle_detections = [d for d in all_detections if d['name'] in ['car', 'bus', 'truck', 'vehicle']]
+            boat_detections = [d for d in all_detections if d['name'] in ['boat', 'kayak', 'raft']]
+
             # 1. Master Gatekeeper Validation
             is_flood = True
             gate_conf = 1.0
             if self.gatekeeper:
                 is_flood, gate_conf = self.gatekeeper.predict(frame)
             
-            # 2. DYNAMIC SENSITIVITY ENGINE (First Prize Logic)
-            # If it's a flood, we are HYPER-VIGILANT. If it's dry, we are SKEPTICAL.
-            current_croc_thresh = 0.45 if is_flood else 0.80
-            croc_detections = self.croc_detector.detect(frame, conf_threshold=current_croc_thresh)
+            # 2. THE ELITE OVERRIDE: Reject if dry and no threats found
+            # If Gatekeeper is highly confident (0.90+) that it's dry land, 
+            # we ignore low-confidence "ghost" detections to avoid flickering.
+            strict_rejection = (not is_flood and gate_conf > 0.90)
             
-            # 3. THE ELITE OVERRIDE: Reject if Gatekeeper is sure it's dry and no high-confidence predator found
-            if not is_flood and (not croc_detections or len(croc_detections) == 0):
+            if strict_rejection and (not all_detections or max([d['conf'] for d in all_detections] + [0]) < 0.40):
                 return {
                     'risk_score': 5.0, 'risk_level': "LOW (Safe)", 'water_p': 0.0,
                     'mask': np.zeros((h_orig, w_orig), dtype=np.uint8),
                     'submersion': 0.0, 'flow_speed': 0.0, 'predict_expansion': None,
-                    'gatekeeper_info': f"SigLIP Mode: Environmental Stability ({gate_conf:.2%})",
-                    'crocodiles': []
+                    'gatekeeper_info': f"SigLIP Mode: Stable ({gate_conf:.2%})",
+                    'crocodiles': [], 'people': [], 'vehicles': []
                 }
             
             # 1. Segmentation (FloodNet)
@@ -178,37 +187,60 @@ class AdvancedHybridInference:
             weather_data = torch.tensor([[water_p, flow_speed, submersion_score, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0]], dtype=torch.float32).to(self.device)
             neural_risk_raw = self.risk_network(pooled_vision_padded, weather_data)['risk_score'].item()
             
-            # Base score logic: Increased sensitivity for urban flooding
-            danger_factor = 1.0 + (0.8 if flow_speed > 2.0 else 0.0) + (1.2 if submersion_score > 0.2 else 0.0)
-            base_score = min(70, water_p * 1.5) # More aggressive scaling
+            # Base score logic: Aggressive scaling for Urban Flooding (10% water = 50pt base)
+            danger_factor = 1.0 + (1.0 if flow_speed > 1.5 else 0.0) + (1.5 if submersion_score > 0.15 else 0.0)
+            base_score = min(85, water_p * 5.0) 
             
             # If water is very low and no flow/submersion, keep it LOW
-            if water_p < 5 and flow_speed < 0.5 and submersion_score < 0.05:
-                calibrated_score = min(20, neural_risk_raw * 0.2)
+            if water_p < 4 and flow_speed < 0.4 and submersion_score < 0.04:
+                calibrated_score = min(15, neural_risk_raw * 0.2)
             else:
-                # Dynamic fusion of Base (Physics) + Neural (Vision)
-                calibrated_score = (base_score * danger_factor) + (neural_risk_raw * 0.3)
+                # Dynamic fusion with higher Neural weight (0.5) for "Intuition"
+                calibrated_score = (base_score * danger_factor) + (neural_risk_raw * 0.5)
                 
             final_risk_score = min(100.0, calibrated_score)
             
-            if final_risk_score < 20: rl = "LOW"
+            rl = "MEDIUM"
+            if final_risk_score < 20: rl = "LOW (Safe)"
             elif final_risk_score < 45: rl = "MEDIUM"
             elif final_risk_score < 75: rl = "HIGH"
             else: rl = "EXTREME"
 
+            # 5. PRIORITY-LEVEL OVERRIDES (THE WINNING LOGIC)
+            final_hazard_label = rl
+            
+            # PRIORITY 1: Predator in Water (Lethal Threat)
+            if croc_detections and (water_p > 5 or is_flood):
+                final_hazard_label = "EXTREME (LETHAL HAZARD)"
+                calibrated_score = 100.0
+                
+            # PRIORITY 2: People in Flood (Life Threat)
+            elif people_detections and (water_p > 5 or is_flood):
+                final_hazard_label = "EXTREME (LIFE AT RISK)"
+                calibrated_score = 100.0
+                
+            # PRIORITY 3: High-Flow Kinetic Impact (Physical Threat)
+            elif flow_speed > 3.0 and (water_p > 10 or is_flood):
+                final_hazard_label = "EXTREME (KINETIC IMPACT)"
+                calibrated_score = max(calibrated_score, 98.0)
+
+            # Secondary Predator Alert (Dry Land or Low Confidence)
+            elif croc_detections:
+                final_hazard_label = "HIGH (PREDATOR SUSPECTED)"
+                calibrated_score = max(calibrated_score, 85.0)
+
+            final_risk_score = min(100.0, calibrated_score)
+            
             # 7. Final Hazard Assessment (Multi-Threat Fusion)
             res = {
-                'risk_score': final_risk_score, 'risk_level': rl, 'water_p': water_p,
+                'risk_score': final_risk_score, 'risk_level': final_hazard_label, 'water_p': water_p,
                 'mask': cv2.resize(mask, (w_orig, h_orig), interpolation=cv2.INTER_NEAREST),
                 'submersion': submersion_score, 'flow_speed': flow_speed,
                 'predict_expansion': expansion_heatmap if expansion_heatmap is None else cv2.resize(expansion_heatmap, (w_orig, h_orig)),
-                'crocodiles': croc_detections
+                'crocodiles': croc_detections,
+                'people': people_detections,
+                'vehicles': vehicle_detections + boat_detections
             }
-            
-            if croc_detections:
-                # Force EXTREME if predator spotted
-                res['risk_level'] = "EXTREME (PREDATOR)"
-                res['risk_score'] = max(res['risk_score'], 95.0)
             
             return res
         except Exception as e:

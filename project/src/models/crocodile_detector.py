@@ -22,9 +22,10 @@ class CrocodileDetector:
         try:
             # Use the official YOLOv8-World model (High-tech!)
             self.model = YOLO('yolov8s-worldv2.pt') 
-            self.model.set_classes(["crocodile"]) # Lock on to crocodiles
+            # Expanded vocabulary for better Zero-Shot recall
+            self.model.set_classes(["crocodile", "alligator", "large reptile", "caiman"]) 
             self.model.to(self.device)
-            print("✅ YOLO-World active: Detecting 'Crocodile' via Natural Language.")
+            print("✅ YOLO-World active: Detecting 'Predators' via Natural Language.")
         except Exception as e:
             print(f"❌ Failed to load YOLO-World: {e}")
             self.model = None
