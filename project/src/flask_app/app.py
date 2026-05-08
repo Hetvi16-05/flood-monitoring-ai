@@ -96,14 +96,15 @@ def gen_frames(camera_source=0):
             break
         
         if frame_count % FRAME_SKIP == 0:
-            # Use same inference as app.py
+            # [UPGRADED] Using Advanced V3.1 Elite Engine
             try:
-                res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_hybrid(
-                    frame, models, 
-                    show_yolo=user_settings['show_yolo'], 
-                    show_mask=user_settings['show_mask'],
-                    explain_ai=user_settings['explain_ai']
+                res_img, water_p, obj_summary, risk_level, risk_score, telemetry = run_advanced_hybrid(
+                    frame, bundle['engine']
                 )
+                
+                # [NEW] MASTER ALERT LOGGING
+                if telemetry.get('croc_detected'):
+                    print(f"🚨 🐊 MASTER ALERT: {telemetry['croc_count']} CROCODILE(S) DETECTED!")
                 
                 # IMPORTANT: Update global state
                 telemetry['risk_level'] = risk_level

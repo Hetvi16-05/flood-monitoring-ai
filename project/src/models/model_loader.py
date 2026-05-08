@@ -108,6 +108,10 @@ def load_models():
         "xai_engine": "Active" if gcam else "Disabled"
     }
     
+    # 5. Initialize the Advanced Elite Engine
+    from inference.advanced_inference import AdvancedHybridInference
+    engine = AdvancedHybridInference()
+    
     return {
         "models": {
             "yolo_custom": yolo_custom, 
@@ -119,5 +123,6 @@ def load_models():
             "forecaster": forecaster,
             "gcam": gcam
         },
+        "engine": engine,
         "metadata": metadata
     }

@@ -1,0 +1,8 @@
+# RAINWISE V3.1 - Master Crocodile Dataset
+path: /Users/HetviSheth/Flood_Prediction/newmodel/master_crocodile_dataset
+train: train/images
+val: valid/images
+
+# Classes
+nc: 1
+names: ['crocodile']

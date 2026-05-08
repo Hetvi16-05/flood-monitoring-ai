@@ -3,6 +3,7 @@ import cv2
 import torch
 import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 from collections import deque
 from pathlib import Path
 
@@ -194,8 +195,15 @@ class AdvancedHybridInference:
         if flow_speed > 3.0: danger_factor += 0.5 # Fast water is dangerous
         if submersion_score > 0.3: danger_factor += 0.5 # Significant submersion
         
-        # Final calibrated score
-        # Using a weighted blend of Rule-based and Neural-based risk
+        # 5. Hybrid Risk Calculation
+        # Prepare inputs for the Neural Risk Network
+        pooled_vision = F.adaptive_avg_pool2d(input_6c, (1, 1)).flatten(1)
+        # Pad to 1024 if needed (depending on backbone dim)
+        pooled_vision_padded = F.pad(pooled_vision, (0, 1024 - pooled_vision.shape[1]))
+        
+        weather_data = torch.tensor([[water_p, flow_speed, submersion_score, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0]]).to(self.device)
+        
+        # Neural-based risk
         neural_risk_raw = self.risk_network(pooled_vision_padded, weather_data)['risk_score'].item()
         
         # SAFETY OVERRIDE: If water is low and speed is low, it CANNOT be extreme
@@ -274,7 +282,12 @@ def run_advanced_hybrid(frame, engine, **kwargs):
         'submersion': res['submersion'],
         'flow_speed': res['flow_speed'],
         'predict_expansion': res['predict_expansion'] is not None,
+        'croc_count': len(res.get('crocodiles', [])),
+        'croc_detected': len(res.get('crocodiles', [])) > 0,
         'temporal_insights': [f"Flow Speed: {res['flow_speed']:.2f} px/f", f"Risk Level: {res['risk_level']}"]
     }
+    
+    if telemetry['croc_detected']:
+        telemetry['temporal_insights'].insert(0, f"🐊 ALERT: {telemetry['croc_count']} Crocodile(s) Spotted!")
     
     return res_img, res['water_p'], "Custom Detection Active", res['risk_level'], res['risk_score'], telemetry

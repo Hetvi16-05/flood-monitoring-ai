@@ -42,3 +42,9 @@ runs/
 *.pt
 *.safetensors
 newmodel/hf_flood_model_final/
+
+# RAINWISE V3.1 - Master Predator Ignores
+**/master_crocodile_dataset/
+**/crocodile_training/
+**/Crocodile/
+**/Crocodile-2/
