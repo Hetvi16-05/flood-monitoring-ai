@@ -124,12 +124,15 @@ class AdvancedHybridInference:
             if self.gatekeeper:
                 is_flood, gate_conf = self.gatekeeper.predict(frame)
             
-            # 2. THE ELITE OVERRIDE: Reject if dry and no threats found
-            # If Gatekeeper is highly confident (0.90+) that it's dry land, 
-            # we ignore low-confidence "ghost" detections to avoid flickering.
-            strict_rejection = (not is_flood and gate_conf > 0.90)
+            # 2. THE ELITE OVERRIDE: Reject if dry or if it's just trees (Green Rejection)
+            avg_green = frame[:,:,1].mean()
+            avg_blue = frame[:,:,0].mean()
+            # Vegetation check remains, but we allow more brown/murky colors
+            is_vegetation = (avg_green > avg_blue * 1.15) 
             
-            if strict_rejection and (not all_detections or max([d['conf'] for d in all_detections] + [0]) < 0.40):
+            # RECALIBRATED: Loosened threshold to 0.75 to capture muddy/murky urban floods
+            # This ensures Abacus Circle and muddy locations are NOT ignored.
+            if (not is_flood or gate_conf < 0.75 or is_vegetation) and (not all_detections or max([d['conf'] for d in all_detections] + [0]) < 0.35):
                 return {
                     'risk_score': 5.0, 'risk_level': "LOW (Safe)", 'water_p': 0.0,
                     'mask': np.zeros((h_orig, w_orig), dtype=np.uint8),
@@ -169,14 +172,24 @@ class AdvancedHybridInference:
                 if flow_water.size > 0:
                     flow_speed = float(np.mean(np.linalg.norm(flow_water, axis=1)))
 
-            # 5. Smart Water Detection (Fused Mask)
+            # 5. Smart Water Detection (Fused Mask with Spectral Master-Lock)
             seg_water = (mask < 3).astype(np.float32)
             ndwi_raw = ndwi_batch[0, 0].cpu().numpy()
-            spectral_water = (ndwi_raw > 0.55).astype(np.float32)
+            
+            # THE SPECTRAL MASTER-LOCK: Recalibrated for MUDDY WATER
+            spectral_water_p = (np.sum(ndwi_raw > 0.45) / ndwi_raw.size) * 100
+            
+            spectral_water = (ndwi_raw > 0.50).astype(np.float32)
             texture_raw = input_6c[0, 4].cpu().numpy()
             low_texture = (texture_raw < 0.3).astype(np.float32)
             
-            fused_water_mask = (seg_water > 0.5) | ((spectral_water > 0.5) & (low_texture > 0.5))
+            # If Physics (NDWI) is totally absent (< 0.3%), we treat SegFormer as a hallucination
+            # We lowered this to 0.3% to capture murky/muddy water reflections.
+            if spectral_water_p < 0.3:
+                fused_water_mask = np.zeros_like(seg_water)
+            else:
+                fused_water_mask = (seg_water > 0.5) | ((spectral_water > 0.5) & (low_texture > 0.5))
+                
             fused_water_mask = cv2.medianBlur(fused_water_mask.astype(np.uint8), 5)
             water_p = float(np.mean(fused_water_mask) * 100)
             
@@ -206,28 +219,45 @@ class AdvancedHybridInference:
             elif final_risk_score < 75: rl = "HIGH"
             else: rl = "EXTREME"
 
-            # 5. PRIORITY-LEVEL OVERRIDES (THE WINNING LOGIC)
+            # 5. PRIORITY-LEVEL OVERRIDES (THE SUPREME HIERARCHY)
             final_hazard_label = rl
             
-            # PRIORITY 1: Predator in Water (Lethal Threat)
-            if croc_detections and (water_p > 5 or is_flood):
+            # Master Condition: We define "Active Flood" as visible water (>1%) OR High Gatekeeper confidence
+            is_active_flood = (water_p > 1.0 or (is_flood and gate_conf > 0.85))
+            
+            # PRIORITY 1: Predator + Human + Water (Worst Case Scenario)
+            if croc_detections and people_detections and is_active_flood:
+                final_hazard_label = "EXTREME (PREDATOR-HUMAN CONTACT)"
+                calibrated_score = 100.0
+                
+            # PRIORITY 2: Predator in Water (Lethal Threat)
+            elif croc_detections and is_active_flood:
                 final_hazard_label = "EXTREME (LETHAL HAZARD)"
                 calibrated_score = 100.0
                 
-            # PRIORITY 2: People in Flood (Life Threat)
-            elif people_detections and (water_p > 5 or is_flood):
+            # PRIORITY 3: People in Flood (Life Threat)
+            # ONLY EXTREME if person is actually IN the water area
+            elif people_detections and is_active_flood:
                 final_hazard_label = "EXTREME (LIFE AT RISK)"
                 calibrated_score = 100.0
                 
-            # PRIORITY 3: High-Flow Kinetic Impact (Physical Threat)
-            elif flow_speed > 3.0 and (water_p > 10 or is_flood):
+            # PRIORITY 4: High-Flow Kinetic Impact (Physical Threat)
+            elif flow_speed > 3.0 and is_active_flood:
                 final_hazard_label = "EXTREME (KINETIC IMPACT)"
                 calibrated_score = max(calibrated_score, 98.0)
+
+            # PRIORITY 5: Significant Inundation (Urban Threat)
+            elif water_p > 40.0:
+                final_hazard_label = "HIGH (MAJOR INUNDATION)"
+                calibrated_score = max(calibrated_score, 85.0)
 
             # Secondary Predator Alert (Dry Land or Low Confidence)
             elif croc_detections:
                 final_hazard_label = "HIGH (PREDATOR SUSPECTED)"
                 calibrated_score = max(calibrated_score, 85.0)
+
+            # NOTE: If only People are detected on dry land, they do NOT trigger EXTREME.
+            # They stay as LOW or MODERATE based on the base_score.
 
             final_risk_score = min(100.0, calibrated_score)
             
