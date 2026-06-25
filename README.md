@@ -1,6 +1,6 @@
 # 🌧️ RAINWISE: Enterprise AI Computer Vision
 
-RAINWISE is a high-performance, hybrid AI system for **Flood Monitoring and Urban Analysis**. It combines pixel-level semantic segmentation (LRASPP) with real-time object detection (YOLOv8) to provide a comprehensive situational awareness platform.
+RAINWISE is a high-performance, hybrid AI system for **Flood Monitoring and Urban Analysis**. It combines pixel-level semantic segmentation (LRASPP) with real-time object detection (YOLOv8) to provide a comprehensive situational awareness platform.This is mainly for Learning purpose.
 
 ## 🏗️ Architecture
 The system follows a modular pipeline:
